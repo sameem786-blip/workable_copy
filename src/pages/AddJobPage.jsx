@@ -8,20 +8,31 @@ import {
   Stack,
   TextField,
   Typography,
+  Alert,
+  Snackbar,
 } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { addJob } from "../store/jobsSlice";
 import { addLog } from "../store/logsSlice";
 import { formFieldTypes } from "../constants/formFieldTypes";
+import { createJob } from "../services/jobService";
 
 const typeOptions = ["Full-time", "Part-time", "Contract"];
-const departmentOptions = ["Engineering", "Product", "Customer Success", "People", "Marketing"];
+const departmentOptions = [
+  "Engineering",
+  "Product",
+  "Customer Success",
+  "People",
+  "Marketing",
+];
 
 export default function AddJobPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const user = useSelector((state) => state.auth.user);
+
+  // Form state
   const [form, setForm] = useState({
     title: "",
     department: "",
@@ -31,14 +42,27 @@ export default function AddJobPage() {
     description: "",
     status: "draft",
   });
-  const [formFields, setFormFields] = useState([{ label: "Resume", required: true, inputType: "file" }]);
 
+  const [formFields, setFormFields] = useState([
+    { label: "Resume", required: true, inputType: "file" },
+  ]);
+
+  // Snackbar states
+  const [success, setSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  // Handlers
   const handleChange = (field) => (event) => {
     setForm((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
   const handleAddField = () => {
-    setFormFields((prev) => [...prev, { label: "", required: false, inputType: "text" }]);
+    setFormFields((prev) => [
+      ...prev,
+      { label: "", required: false, inputType: "text" },
+    ]);
   };
 
   const handleFieldChange = (index, key, value) => {
@@ -49,28 +73,64 @@ export default function AddJobPage() {
     });
   };
 
-  const handleSubmit = (event, statusOverride) => {
+  const handleSubmit = async (event, statusOverride) => {
     event.preventDefault();
+
+    // Validation
+    if (
+      !form.department ||
+      !form.title ||
+      !form.location ||
+      !form.summary ||
+      !form.description ||
+      !form.type
+    ) {
+      setErrorMessage("Please fill out all required fields.");
+      setError(true);
+      return;
+    }
+
     const status = statusOverride || form.status || "draft";
+
     const job = {
       ...form,
-      posted: "Just now",
       status,
+      posted: new Date().toISOString(),
       formFields: formFields.filter((field) => field.label.trim()),
+      createdBy: {
+        name: user?.name || "Unknown",
+        email: user?.email || "",
+        uid: user?.uid || "",
+      },
     };
-    const action = addJob(job);
-    dispatch(action);
-    const newJob = action.payload;
-    dispatch(
-      addLog({
-        actor: { name: user?.name || "User", email: user?.email || "" },
-        entityId: newJob.id,
-        entityName: newJob.title,
-        entityType: "job",
-        actionLabel: status === "live" ? "published job" : "saved job as draft",
-      })
-    );
-    navigate(`/jobs/${newJob.id}`);
+
+    try {
+      const newJob = await createJob(job);
+
+      dispatch(addJob(newJob));
+
+      dispatch(
+        addLog({
+          actor: { name: user?.name, email: user?.email },
+          entityId: newJob.id,
+          entityName: newJob.title,
+          entityType: "job",
+          actionLabel:
+            status === "live" ? "published job" : "saved job as draft",
+        })
+      );
+
+      setSuccessMessage("Job created successfully!");
+      setSuccess(true);
+
+      setTimeout(() => {
+        navigate(`/jobs/${newJob.id}`);
+      }, 1200);
+    } catch (err) {
+      console.error("Error creating job:", err);
+      setErrorMessage("Failed to create job.");
+      setError(true);
+    }
   };
 
   return (
@@ -96,7 +156,11 @@ export default function AddJobPage() {
             </Typography>
           </Stack>
 
-          <Stack component="form" spacing={2} onSubmit={(e) => handleSubmit(e, form.status)}>
+          <Stack
+            component="form"
+            spacing={2}
+            onSubmit={(e) => handleSubmit(e, form.status)}
+          >
             <TextField label="Title" required value={form.title} onChange={handleChange("title")} />
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <TextField
@@ -129,22 +193,9 @@ export default function AddJobPage() {
               </TextField>
             </Stack>
             <TextField label="Location" required value={form.location} onChange={handleChange("location")} />
-            <TextField
-              label="Short summary"
-              required
-              multiline
-              minRows={2}
-              value={form.summary}
-              onChange={handleChange("summary")}
-            />
-            <TextField
-              label="Description"
-              required
-              multiline
-              minRows={4}
-              value={form.description}
-              onChange={handleChange("description")}
-            />
+            <TextField label="Short summary" required multiline minRows={2} value={form.summary} onChange={handleChange("summary")} />
+            <TextField label="Description" required multiline minRows={4} value={form.description} onChange={handleChange("description")} />
+
             <Stack spacing={1}>
               <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                 Application form fields
@@ -174,7 +225,9 @@ export default function AddJobPage() {
                     label="Required"
                     select
                     value={field.required ? "required" : "optional"}
-                    onChange={(e) => handleFieldChange(index, "required", e.target.value === "required")}
+                    onChange={(e) =>
+                      handleFieldChange(index, "required", e.target.value === "required")
+                    }
                     sx={{ width: { xs: "100%", sm: 180 } }}
                   >
                     <MenuItem value="required">Required</MenuItem>
@@ -186,6 +239,7 @@ export default function AddJobPage() {
                 Add field
               </Button>
             </Stack>
+
             <Stack direction="row" spacing={1.5}>
               <Button type="submit" variant="contained" onClick={(e) => handleSubmit(e, "live")}>
                 Create job
@@ -200,6 +254,30 @@ export default function AddJobPage() {
           </Stack>
         </CardContent>
       </Card>
+
+      {/* Success Snackbar */}
+      <Snackbar
+        open={success}
+        autoHideDuration={2500}
+        onClose={() => setSuccess(false)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert severity="success" variant="filled" onClose={() => setSuccess(false)}>
+          {successMessage}
+        </Alert>
+      </Snackbar>
+
+      {/* Error Snackbar */}
+      <Snackbar
+        open={error}
+        autoHideDuration={2500}
+        onClose={() => setError(false)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert severity="error" variant="filled" onClose={() => setError(false)}>
+          {errorMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

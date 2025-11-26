@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth, db } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
 import {
   Alert,
   Box,
@@ -17,9 +20,11 @@ import LockIcon from "@mui/icons-material/Lock";
 import MailIcon from "@mui/icons-material/Mail";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { loginSuccess } from "../store/authSlice";
+import { fetchUsers } from "../services/userService";
 
 export default function LoginPage() {
   const dispatch = useDispatch();
+  const [users, setUsers] = useState([]);
   const employees = useSelector((state) => state.employees.list);
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -42,40 +47,56 @@ export default function LoginPage() {
     setError("");
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    const match = employees.find(
-      (user) =>
-        user.email.toLowerCase() === form.email.trim().toLowerCase() &&
-        user.password === form.password
-    );
 
-    if (!match) {
-      setError(
-        "Invalid credentials. Try super-admin@gmail.com or admin@gmail.com with password 12345678."
+    try {
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        form.email,
+        form.password
       );
-      setSuccess(false);
-      return;
-    }
 
-    const displayName = deriveName(match.email);
-    setLoggedInRole(match.role);
-    setSuccess(true);
-    setError("");
-    dispatch(
-      loginSuccess({
-        email: match.email,
-        role: match.role,
-        name: displayName,
-      })
-    );
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
+      const user = userCredential.user;
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
+      if (!userSnap.exists()) {
+        setError("User profile not found in Firestore.");
+        return;
+      }
+      const profile = userSnap.data();
+      const role = Array.isArray(profile.role) ? profile.role[0] : profile.role;
+      const fullName =
+        `${profile.firstName} ${profile.lastName}`.trim() ||
+        deriveName(user.email);
+      dispatch(
+        loginSuccess({
+          uid: user.uid,
+          email: user.email,
+          role,
+          name: fullName,
+          department: profile.department,
+        })
+      );
+
+      setLoggedInRole(role);
+      setSuccess(true);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => navigate(redirectTo), 800);
+    } catch (err) {
+      console.error(err);
+      setError("Invalid email or password.");
+      setSuccess(false);
     }
-    timeoutRef.current = setTimeout(() => {
-      navigate(redirectTo);
-    }, 800);
   };
+
+  useEffect(() => {
+    const loadUsers = async () => {
+      const data = await fetchUsers();
+      setUsers(da5ta);
+    };
+    loadUsers();
+  }, []);
 
   useEffect(
     () => () => {

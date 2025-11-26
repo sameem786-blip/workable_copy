@@ -1,42 +1,85 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { Box, Button, Chip, Divider, Stack, Typography, Tabs, Tab, TextField, MenuItem } from "@mui/material";
+import {
+  Box,
+  Button,
+  Chip,
+  Divider,
+  Stack,
+  Typography,
+  Tabs,
+  Tab,
+  TextField,
+  MenuItem
+} from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import WorkOutlineIcon from "@mui/icons-material/WorkOutline";
 import PlaceIcon from "@mui/icons-material/Place";
 import CategoryIcon from "@mui/icons-material/Category";
+
 import { updateJobStatus, updateJobFormFields } from "../store/jobsSlice";
 import { addLog } from "../store/logsSlice";
 import { formFieldTypes } from "../constants/formFieldTypes";
+import { getJob } from "../services/jobService";
 
 export default function JobDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const jobs = useSelector((state) => state.jobs.list);
+
+  const reduxJobs = useSelector((state) => state.jobs.list);
   const user = useSelector((state) => state.auth.user);
+
+  const [job, setJob] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("details");
 
-  const job = useMemo(() => jobs.find((item) => String(item.id) === String(id)), [id, jobs]);
-  const [editableFields, setEditableFields] = useState(() => job?.formFields || []);
+  // fallback job from Redux (if exists)
+  const reduxJob = useMemo(
+    () => reduxJobs.find((item) => String(item.id) === String(id)),
+    [id, reduxJobs]
+  );
 
-  if (!job) {
+  // Load job from Firestore
+  useEffect(() => {
+    const loadJob = async () => {
+      setLoading(true);
+
+      // Use Redux job first to prevent blank flash
+      if (reduxJob) setJob(reduxJob);
+
+      // Then fetch latest from Firestore
+      const firestoreJob = await getJob(id);
+
+      setJob(firestoreJob || reduxJob || null);
+      setLoading(false);
+    };
+
+    loadJob();
+  }, [id, reduxJob]);
+
+  const [editableFields, setEditableFields] = useState([]);
+
+  // Update editable fields when job loads
+  useEffect(() => {
+    if (job?.formFields) {
+      setEditableFields(job.formFields);
+    }
+  }, [job]);
+
+  // Loading state
+  if (loading || !job) {
     return (
-      <Box sx={{ mt: 2 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/jobs")}>
-          Back to jobs
-        </Button>
-        <Typography variant="h5" sx={{ mt: 2, fontWeight: 700 }}>
-          Job not found
-        </Typography>
-        <Typography sx={{ color: "#475569" }}>This posting may have been moved or removed.</Typography>
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h5">Loading job...</Typography>
       </Box>
     );
   }
 
   const handleStatusChange = (nextStatus) => {
     dispatch(updateJobStatus({ id: job.id, status: nextStatus }));
+
     dispatch(
       addLog({
         actor: { name: user?.name || "User", email: user?.email || "" },
@@ -57,16 +100,17 @@ export default function JobDetailPage() {
   };
 
   const handleAddField = () => {
-    setEditableFields((prev) => [...prev, { label: "", required: false, inputType: "text" }]);
+    setEditableFields((prev) => [
+      ...prev,
+      { label: "", required: false, inputType: "text" }
+    ]);
   };
 
   const handleSaveFields = () => {
-    dispatch(
-      updateJobFormFields({
-        id: job.id,
-        formFields: editableFields.filter((field) => field.label.trim()),
-      })
-    );
+    const cleanedFields = editableFields.filter((field) => field.label.trim());
+
+    dispatch(updateJobFormFields({ id: job.id, formFields: cleanedFields }));
+
     dispatch(
       addLog({
         actor: { name: user?.name || "User", email: user?.email || "" },
@@ -88,12 +132,14 @@ export default function JobDetailPage() {
         <Typography variant="h3" sx={{ fontWeight: 800 }}>
           {job.title}
         </Typography>
+
         <Stack direction="row" spacing={1} flexWrap="wrap">
           <Chip icon={<CategoryIcon />} label={job.department} variant="outlined" />
           <Chip icon={<WorkOutlineIcon />} label={job.type} variant="outlined" />
           <Chip icon={<PlaceIcon />} label={job.location} variant="outlined" />
           <StatusChip status={job.status} />
         </Stack>
+
         <Typography variant="body2" sx={{ color: "#64748b", fontWeight: 600 }}>
           {job.posted}
         </Typography>
@@ -101,25 +147,22 @@ export default function JobDetailPage() {
 
       <Divider sx={{ my: 3 }} />
 
+      {/* Admin Controls */}
       {user && (user.role === "admin" || user.role === "super-admin") ? (
         <>
           <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mt: 1, borderBottom: "1px solid #e5e7eb" }}>
             <Tab label="Job details" value="details" />
             <Tab label="Form fields" value="form" />
           </Tabs>
+
+          {/* DETAILS TAB */}
           {tab === "details" && (
             <Stack spacing={2} sx={{ mt: 3 }}>
               <Typography sx={{ color: "#334155", lineHeight: 1.7 }}>{job.description}</Typography>
-              <Typography sx={{ color: "#475569", lineHeight: 1.7 }}>
-                We value builders who are customer-obsessed, collaborative, and comfortable shipping iteratively. If this sounds
-                like you, we would love to hear from you.
-              </Typography>
-              <Button variant="outlined" size="large" onClick={() => navigate("/jobs")}>
-                Back to jobs
-              </Button>
+
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
                 {job.status !== "live" && (
-                  <Button variant="contained" color="primary" onClick={() => handleStatusChange("live")}>
+                  <Button variant="contained" onClick={() => handleStatusChange("live")}>
                     Publish job
                   </Button>
                 )}
@@ -131,10 +174,12 @@ export default function JobDetailPage() {
               </Stack>
             </Stack>
           )}
+
+          {/* FORM FIELDS TAB */}
           {tab === "form" && (
             <Stack spacing={2} sx={{ mt: 3 }}>
               {editableFields.map((field, index) => (
-                <Stack key={index} direction={{ xs: "column", sm: "row" }} spacing={1} alignItems="center">
+                <Stack key={index} direction={{ xs: "column", sm: "row" }} spacing={1}>
                   <TextField
                     label="Field label"
                     value={field.label}
@@ -146,7 +191,7 @@ export default function JobDetailPage() {
                     select
                     value={field.inputType}
                     onChange={(e) => handleFieldChange(index, "inputType", e.target.value)}
-                    sx={{ width: { xs: "100%", sm: 200 } }}
+                    sx={{ width: 200 }}
                   >
                     {formFieldTypes.map((type) => (
                       <MenuItem key={type.value} value={type.value}>
@@ -159,38 +204,32 @@ export default function JobDetailPage() {
                     select
                     value={field.required ? "required" : "optional"}
                     onChange={(e) => handleFieldChange(index, "required", e.target.value === "required")}
-                    sx={{ width: { xs: "100%", sm: 180 } }}
+                    sx={{ width: 200 }}
                   >
                     <MenuItem value="required">Required</MenuItem>
                     <MenuItem value="optional">Optional</MenuItem>
                   </TextField>
                 </Stack>
               ))}
-              <Button variant="text" onClick={handleAddField} sx={{ alignSelf: "flex-start" }}>
+
+              <Button variant="text" onClick={handleAddField}>
                 Add field
               </Button>
-              <Stack direction="row" spacing={1.5}>
-                <Button variant="contained" onClick={handleSaveFields}>
-                  Save form fields
-                </Button>
-                <Button variant="text" onClick={() => setEditableFields(job.formFields || [])}>
-                  Reset
-                </Button>
-              </Stack>
+
+              <Button variant="contained" onClick={handleSaveFields}>
+                Save form fields
+              </Button>
             </Stack>
           )}
         </>
       ) : (
-        <Stack spacing={2} sx={{ mt: 2 }}>
+        <>
+          {/* Non-admin view */}
           <Typography sx={{ color: "#334155", lineHeight: 1.7 }}>{job.description}</Typography>
-          <Typography sx={{ color: "#475569", lineHeight: 1.7 }}>
-            We value builders who are customer-obsessed, collaborative, and comfortable shipping iteratively. If this sounds
-            like you, we would love to hear from you.
-          </Typography>
           <Button variant="contained" size="large" onClick={() => navigate(`/jobs/${job.id}/apply`)}>
             Apply now
           </Button>
-        </Stack>
+        </>
       )}
     </Box>
   );
@@ -198,6 +237,5 @@ export default function JobDetailPage() {
 
 function StatusChip({ status }) {
   const color = status === "live" ? "success" : "default";
-  const label = status === "live" ? "Live" : "Draft";
-  return <Chip label={label} color={color} variant="outlined" />;
+  return <Chip label={status === "live" ? "Live" : "Draft"} color={color} variant="outlined" />;
 }
