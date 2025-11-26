@@ -1,32 +1,46 @@
 import { useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
+
 import {
   Box,
   Button,
   Card,
   CardContent,
-  MenuItem,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
-import { addCandidate } from "../store/candidatesSlice";
+
 import { addLog } from "../store/logsSlice";
+import { createCandidate, uploadResume } from "../services/candidateService";
 
 export default function ApplyJobPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
+
   const jobs = useSelector((state) => state.jobs.list);
   const user = useSelector((state) => state.auth.user);
-  const job = useMemo(() => jobs.find((item) => String(item.id) === String(id)), [id, jobs]);
 
-  const [applicant, setApplicant] = useState({ firstName: "", lastName: "", email: "", contact: "", resume: "" });
-  const [responses, setResponses] = useState(() =>
-    job?.formFields?.map((field) => ({ ...field, value: "" })) || []
+  const job = useMemo(
+    () => jobs.find((item) => String(item.id) === String(id)),
+    [id, jobs]
   );
 
+  const [applicant, setApplicant] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    contact: "",
+    resumeFile: null, // <-- FILE STORED HERE
+  });
+
+  const [responses, setResponses] = useState(
+    () => job?.formFields?.map((f) => ({ ...f, value: "" })) || []
+  );
+
+  // ❌ Redirect admins OR missing job OR draft job
   if (user || !job || job.status !== "live") {
     return <Navigate to="/jobs" replace />;
   }
@@ -34,103 +48,153 @@ export default function ApplyJobPage() {
   const handleFieldChange = (index, value) => {
     setResponses((prev) => {
       const next = [...prev];
-      next[index] = { ...next[index], value };
+      next[index].value = value;
       return next;
     });
   };
 
-  const handleSubmit = (event) => {
+  const validate = () => {
+    if (!applicant.firstName.trim()) return "First name required";
+    if (!applicant.lastName.trim()) return "Last name required";
+    if (!applicant.email.trim()) return "Email required";
+    if (!applicant.contact.trim()) return "Contact number required";
+    if (!applicant.resumeFile) return "Resume required";
+
+    for (const field of responses) {
+      if (field.required && !field.value.trim()) {
+        return `Field "${field.label}" is required`;
+      }
+    }
+    return null;
+  };
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    const action = addCandidate({
-      jobId: job.id,
-      jobTitle: job.title,
-      name: `${applicant.firstName} ${applicant.lastName}`.trim(),
-      email: applicant.email,
-      contact: applicant.contact,
-      resume: applicant.resume,
-      answers: responses.map(({ label, inputType, required, value }) => ({
-        label,
-        inputType,
-        required,
-        value,
-      })),
-    });
-    dispatch(action);
-    dispatch(
-      addLog({
-        actor: { name: `${applicant.firstName} ${applicant.lastName}`.trim() || "Applicant", email: applicant.email },
-        entityId: action.payload.id,
-        entityName: `${applicant.firstName} ${applicant.lastName}`.trim() || applicant.email,
-        entityType: "candidate",
-        actionLabel: "applied to job",
-      })
-    );
-    navigate("/jobs");
+
+    const error = validate();
+    if (error) {
+      alert(error);
+      return;
+    }
+
+    try {
+      // 🔥 1) Upload resume to Firebase Storage
+      const resumeURL = await uploadResume(
+        applicant.resumeFile,
+        job.id,
+        applicant.email
+      );
+
+      // 🔥 2) Save candidate to Firestore
+      const candidateData = {
+        jobId: job.id,
+        jobTitle: job.title,
+        name: `${applicant.firstName} ${applicant.lastName}`.trim(),
+        email: applicant.email,
+        contact: applicant.contact,
+        resume: resumeURL,
+        answers: responses.map(({ label, inputType, required, value }) => ({
+          label,
+          inputType,
+          required,
+          value,
+        })),
+        createdAt: new Date().toISOString(),
+      };
+      console.log("Submitting Candidate:", candidateData);
+      const newCandidate = await createCandidate(candidateData);
+
+      // 🔥 3) Add Activity Log (Redux)
+      dispatch(
+        addLog({
+          actor: {
+            name: candidateData.name || "Applicant",
+            email: candidateData.email,
+          },
+          entityId: newCandidate.id,
+          entityName: candidateData.name,
+          entityType: "candidate",
+          actionLabel: "applied to job",
+        })
+      );
+
+      navigate("/jobs");
+    } catch (err) {
+      console.error("Candidate Submit Failed:", err);
+      alert("There was an error submitting your application. Please try again.");
+    }
   };
 
   return (
     <Box sx={{ display: "grid", placeItems: "center", minHeight: "60vh", py: 4 }}>
-      <Card
-        elevation={0}
-        sx={{
-          width: "100%",
-          maxWidth: 720,
-          borderRadius: 3,
-          border: "1px solid #e5e7eb",
-          boxShadow: "0 18px 40px rgba(15, 23, 42, 0.08)",
-          background: "#ffffff",
-        }}
-      >
-        <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
-          <Stack spacing={1} sx={{ mb: 2 }}>
-            <Typography variant="h5" sx={{ fontWeight: 800 }}>
-              Apply for {job.title}
-            </Typography>
-            <Typography variant="body2" sx={{ color: "#475569" }}>
-              Fill out the form to apply. Required fields are marked.
-            </Typography>
-          </Stack>
+      <Card sx={{ maxWidth: 720, borderRadius: 3 }}>
+        <CardContent>
+          <Typography variant="h5" sx={{ mb: 2, fontWeight: 800 }}>
+            Apply for {job.title}
+          </Typography>
 
           <Stack component="form" spacing={2} onSubmit={handleSubmit}>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <Stack direction={{ sm: "row" }} spacing={2}>
               <TextField
                 label="First name"
                 required
                 value={applicant.firstName}
-                onChange={(e) => setApplicant((prev) => ({ ...prev, firstName: e.target.value }))}
+                onChange={(e) =>
+                  setApplicant((p) => ({ ...p, firstName: e.target.value }))
+                }
               />
               <TextField
                 label="Last name"
                 required
                 value={applicant.lastName}
-                onChange={(e) => setApplicant((prev) => ({ ...prev, lastName: e.target.value }))}
+                onChange={(e) =>
+                  setApplicant((p) => ({ ...p, lastName: e.target.value }))
+                }
               />
             </Stack>
+
             <TextField
               label="Email"
               required
               type="email"
               value={applicant.email}
-              onChange={(e) => setApplicant((prev) => ({ ...prev, email: e.target.value }))}
+              onChange={(e) =>
+                setApplicant((p) => ({ ...p, email: e.target.value }))
+              }
             />
+
             <TextField
               label="Contact number"
               required
               type="tel"
               value={applicant.contact}
-              onChange={(e) => setApplicant((prev) => ({ ...prev, contact: e.target.value }))}
+              onChange={(e) =>
+                setApplicant((p) => ({ ...p, contact: e.target.value }))
+              }
             />
+
             <TextField
               label="Resume"
               required
               type="file"
-              value={undefined}
-              onChange={(e) => setApplicant((prev) => ({ ...prev, resume: e.target.files?.[0]?.name || "" }))}
-              helperText={applicant.resume || "Upload resume"}
+              inputProps={{ accept: ".pdf,.doc,.docx" }}
+              onChange={(e) =>
+                setApplicant((prev) => ({
+                  ...prev,
+                   resumeFile: e.target.files?.[0] || null,
+                }))
+              }
+              helperText={applicant.resumeFile?.name || "Upload resume"}
             />
+
             {responses.map((field, index) => (
-              <FieldInput key={index} field={field} onChange={(value) => handleFieldChange(index, value)} />
+              <FieldInput
+                key={index}
+                field={field}
+                onChange={(value) => handleFieldChange(index, value)}
+              />
             ))}
+
             <Stack direction="row" spacing={1.5}>
               <Button type="submit" variant="contained">
                 Submit application
@@ -147,7 +211,7 @@ export default function ApplyJobPage() {
 }
 
 function FieldInput({ field, onChange }) {
-  const commonProps = {
+  const props = {
     fullWidth: true,
     required: field.required,
     label: field.label,
@@ -157,24 +221,21 @@ function FieldInput({ field, onChange }) {
 
   switch (field.inputType) {
     case "textarea":
-      return <TextField {...commonProps} multiline minRows={3} />;
-    case "rich-text":
-      return <TextField {...commonProps} multiline minRows={5} placeholder="Rich text" />;
-    case "url":
-      return <TextField {...commonProps} type="url" />;
+      return <TextField {...props} multiline minRows={3} />;
     case "number":
-      return <TextField {...commonProps} type="number" />;
+      return <TextField {...props} type="number" />;
+    case "url":
+      return <TextField {...props} type="url" />;
     case "file":
       return (
         <TextField
-          {...commonProps}
+          {...props}
           type="file"
           value={undefined}
           onChange={(e) => onChange(e.target.files?.[0]?.name || "")}
-          helperText={field.value || "Upload file"}
         />
       );
     default:
-      return <TextField {...commonProps} />;
+      return <TextField {...props} />;
   }
 }

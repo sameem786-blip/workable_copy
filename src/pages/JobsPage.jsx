@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
@@ -14,9 +14,11 @@ import {
 import JobFilters from "../components/JobFilters";
 import JobRow from "../components/JobRow";
 import EmptyState from "../components/EmptyState";
+import { setAllJobs } from "../store/jobsSlice";
 
 import { fetchJobs } from "../services/jobService";
 
+// Helper: generate unique options
 function uniqueOptions(items, key) {
   return Array.from(new Set(items.map((item) => item[key]))).sort();
 }
@@ -25,26 +27,30 @@ export default function JobsPage() {
   const user = useSelector((state) => state.auth.user);
   const navigate = useNavigate();
 
+  // 🔥 Local jobs state — DO NOT import Redux setJobs
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
-
+  const dispatch = useDispatch();
+  // Filter state
   const [searchTerm, setSearchTerm] = useState("");
   const [department, setDepartment] = useState("All departments");
   const [location, setLocation] = useState("All locations");
   const [roleType, setRoleType] = useState("All types");
 
-  // LOAD JOBS FROM FIRESTORE
+  // Load jobs from Firestore ONCE
   useEffect(() => {
-    const load = async () => {
+    const loadJobs = async () => {
       setLoading(true);
       const list = await fetchJobs();
       setJobs(list);
       setLoading(false);
+      dispatch(setAllJobs(list));
     };
-    load();
+
+    loadJobs();
   }, []);
 
-  // MUST stay before return — ALWAYS RUNS, regardless of loading
+  // ⭐ Everything filtered inside a single useMemo
   const { filteredJobs, departmentOptions, locationOptions, typeOptions } =
     useMemo(() => {
       const departmentOptions = [
@@ -77,11 +83,8 @@ export default function JobsPage() {
         const matchesType =
           roleType === typeOptions[0] || job.type === roleType;
 
-        const isLive = job.status === "live";
-        const isVisible =
-          user && (user.role === "admin" || user.role === "super-admin")
-            ? true
-            : isLive;
+        const admin = user?.role === "admin" || user?.role === "super-admin";
+        const isVisible = admin ? true : job.status === "live";
 
         return (
           matchesSearch &&
@@ -100,7 +103,9 @@ export default function JobsPage() {
       };
     }, [jobs, searchTerm, department, location, roleType, user]);
 
-  // 🔥 FIXED — return AFTER all hooks run
+  // ========================
+  // UI
+  // ========================
   return (
     <Box>
       {loading ? (
@@ -120,7 +125,14 @@ export default function JobsPage() {
               mb: 3,
             }}
           >
-            <Typography sx={{ color: "#a5b4fc", fontSize: 12 }}>
+            <Typography
+              sx={{
+                textTransform: "uppercase",
+                letterSpacing: 2,
+                color: "#a5b4fc",
+                fontSize: 12,
+              }}
+            >
               Now hiring
             </Typography>
             <Typography variant="h3" sx={{ fontWeight: 700 }}>
@@ -147,18 +159,22 @@ export default function JobsPage() {
           <Card sx={{ borderRadius: 3, border: "1px solid #e5e7eb" }}>
             <CardContent>
               <Stack direction="row" justifyContent="space-between">
-                <Typography variant="h6">All jobs</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  All jobs
+                </Typography>
+
                 <Chip
                   label={`${filteredJobs.length} roles`}
                   color="primary"
                   variant="outlined"
                 />
+
                 {(user?.role === "admin" || user?.role === "super-admin") && (
                   <Button onClick={() => navigate("/jobs/new")}>Add job</Button>
                 )}
               </Stack>
 
-              <Stack spacing={1}>
+              <Stack spacing={1} mt={2}>
                 {filteredJobs.length === 0 ? (
                   <EmptyState />
                 ) : (

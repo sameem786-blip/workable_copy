@@ -1,5 +1,4 @@
 import { createSlice, nanoid } from "@reduxjs/toolkit";
-import { jobPosts as initialJobs } from "../data/jobs";
 
 const baseRequiredFields = [
   { label: "First name", required: true, inputType: "text" },
@@ -11,6 +10,7 @@ const baseRequiredFields = [
 
 function ensureBaseFields(formFields = []) {
   const map = new Map();
+
   [...formFields, ...baseRequiredFields].forEach((field) => {
     const key = field.label.toLowerCase();
     if (!map.has(key)) {
@@ -21,15 +21,22 @@ function ensureBaseFields(formFields = []) {
       });
     }
   });
+
   return Array.from(map.values());
 }
 
 const jobsSlice = createSlice({
   name: "jobs",
   initialState: {
-    list: initialJobs,
+    list: [],            
   },
   reducers: {
+    // Set jobs from Firestore
+    setAllJobs: (state, action) => {
+      state.list = action.payload;
+    },
+
+    // Add job locally (optional)
     addJob: {
       reducer: (state, action) => {
         state.list.push(action.payload);
@@ -39,43 +46,31 @@ const jobsSlice = createSlice({
         return {
           payload: {
             ...job,
-            id: nanoid(),
+            id: job.id || nanoid(),  // if Firestore gave ID, use it
             posted: job.posted || "Just now",
             status: job.status || "draft",
-            formFields: ensureBaseFields(
-              job.formFields?.map((field) => ({
-                label: field.label,
-                required: Boolean(field.required),
-                inputType: field.inputType || "text",
-              })) || []
-            ),
+            formFields: ensureBaseFields(job.formFields || []),
             createdAt: job.createdAt || now.toISOString(),
           },
         };
       },
     },
+
     updateJobStatus: (state, action) => {
       const { id, status } = action.payload;
-      const job = state.list.find((item) => item.id === id);
-      if (job) {
-        job.status = status;
-      }
+      const job = state.list.find((j) => j.id === id);
+      if (job) job.status = status;
     },
+
     updateJobFormFields: (state, action) => {
       const { id, formFields } = action.payload;
-      const job = state.list.find((item) => item.id === id);
-      if (job) {
-        job.formFields = ensureBaseFields(
-          formFields.map((field) => ({
-            label: field.label,
-            required: Boolean(field.required),
-            inputType: field.inputType || "text",
-          }))
-        );
-      }
+      const job = state.list.find((j) => j.id === id);
+      if (job) job.formFields = ensureBaseFields(formFields);
     },
   },
 });
 
-export const { addJob, updateJobStatus, updateJobFormFields } = jobsSlice.actions;
+export const { setAllJobs, addJob, updateJobStatus, updateJobFormFields } =
+  jobsSlice.actions;
+
 export default jobsSlice.reducer;
