@@ -8,18 +8,37 @@ import {
   doc,
   updateDoc,
   deleteDoc,
-  setDoc
+  query,
+  where,
+  serverTimestamp,
 } from "firebase/firestore";
 
 // ==========================
-// CREATE Employee
+// CHECK if email already exists
+// ==========================
+export const isEmailTaken = async (email) => {
+  const q = query(collection(db, "employees"), where("email", "==", email));
+  const snapshot = await getDocs(q);
+  return !snapshot.empty;
+};
+
+// ==========================
+// CREATE Employee (with unique email)
 // ==========================
 export const createEmployee = async (employeeData) => {
   try {
-    // Auto-ID document OR you can also use setDoc with custom ID
+    // 1️⃣ Check duplicate email
+    const emailExists = await isEmailTaken(employeeData.email);
+    if (emailExists) {
+      const error = new Error("email already used");
+      error.code = "email already used";
+      throw error;
+    }
+
+    // 2️⃣ Create employee
     const docRef = await addDoc(collection(db, "employees"), {
       ...employeeData,
-      createdAt: Date.now(),
+      createdAt: serverTimestamp(),
     });
 
     return { id: docRef.id, ...employeeData };
@@ -28,7 +47,6 @@ export const createEmployee = async (employeeData) => {
     throw error;
   }
 };
-
 
 // ==========================
 // FETCH all employees
@@ -43,7 +61,6 @@ export const fetchEmployees = async () => {
   }
 };
 
-
 // ==========================
 // GET employee by ID
 // ==========================
@@ -57,7 +74,6 @@ export const getEmployee = async (id) => {
   }
 };
 
-
 // ==========================
 // UPDATE employee
 // ==========================
@@ -70,7 +86,6 @@ export const updateEmployee = async (id, data) => {
     throw error;
   }
 };
-
 
 // ==========================
 // DELETE employee

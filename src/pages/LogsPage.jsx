@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
@@ -14,13 +14,29 @@ import {
   Typography,
   Link,
 } from "@mui/material";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
+
+import { fetchLogsFromFirestore } from "../services/log.service";
+import { setLogs } from "../store/logsSlice";
 
 export default function LogsPage() {
+  const dispatch = useDispatch();
   const logs = useSelector((state) => state.logs.entries);
   const navigate = useNavigate();
   const jobs = useSelector((state) => state.jobs.list);
   const employees = useSelector((state) => state.employees.list);
+
+  // 🔥 1. Fetch logs from Firestore on mount
+  useEffect(() => {
+    const loadLogs = async () => {
+      const firebaseLogs = await fetchLogsFromFirestore();
+      dispatch(setLogs(firebaseLogs));
+    };
+
+    loadLogs();
+  }, [dispatch]);
+
+  // ------------------ UI BELOW (UNCHANGED) ------------------
 
   const jobLookup = useMemo(() => {
     const map = new Map();
@@ -39,7 +55,9 @@ export default function LogsPage() {
       const job = jobLookup.get(String(log.entityId));
       if (!job) return <Typography sx={{ color: "#94a3b8" }}>Job unavailable</Typography>;
       return (
-        <Link component="button" underline="hover" onClick={() => navigate(`/jobs/${job.id}`)} sx={{ fontWeight: 700 }}>
+        <Link component="button" underline="hover"
+          onClick={() => navigate(`/jobs/${job.id}`)}
+          sx={{ fontWeight: 700 }}>
           {job.title}
         </Link>
       );
@@ -48,16 +66,14 @@ export default function LogsPage() {
       const emp = employeeLookup.get(String(log.entityId));
       if (!emp) return <Typography sx={{ color: "#94a3b8" }}>Employee unavailable</Typography>;
       return (
-        <Link
-          component="button"
-          underline="hover"
+        <Link component="button" underline="hover"
           onClick={() => navigate(`/employees/${emp.id}`)}
-          sx={{ fontWeight: 700 }}
-        >
+          sx={{ fontWeight: 700 }}>
           {emp.name || emp.email}
         </Link>
       );
     }
+
     return <Typography sx={{ color: "#94a3b8" }}>Unavailable</Typography>;
   };
 
@@ -78,6 +94,7 @@ export default function LogsPage() {
                   <TableCell>Date</TableCell>
                 </TableRow>
               </TableHead>
+
               <TableBody>
                 {logs.length === 0 ? (
                   <TableRow>
@@ -99,11 +116,15 @@ export default function LogsPage() {
                         </Stack>
                       </TableCell>
                       <TableCell>{renderLink(log)}</TableCell>
-                      <TableCell>{new Date(log.timestamp).toLocaleString()}</TableCell>
+
+                      <TableCell>
+                        {new Date(log.timestamp).toLocaleString()}
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
               </TableBody>
+
             </Table>
           </TableContainer>
         </CardContent>

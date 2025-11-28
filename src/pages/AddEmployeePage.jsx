@@ -89,7 +89,7 @@ export default function AddEmployeePage() {
       setTimeout(() => navigate(`/employees/${created.id}`), 1200);
     } catch (err) {
       console.error(err);
-      setError("Failed to create employee. Please try again.");
+      setError(err.message || "Failed to create employee. Please try again.");
     } finally {
       setLoading(false);
     }

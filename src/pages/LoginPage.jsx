@@ -3,6 +3,11 @@ import { useDispatch, useSelector } from "react-redux";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "../firebase";
 import { doc, getDoc } from "firebase/firestore";
+import { fetchEmployees } from "../services/employee.service";
+import { fetchLogsFromFirestore } from "../services/log.service";
+
+import { setEmployees } from "../store/employeesSlice";
+import { setLogs } from "../store/logsSlice";
 import {
   Alert,
   Box,
@@ -64,11 +69,14 @@ export default function LoginPage() {
         setError("User profile not found in Firestore.");
         return;
       }
+
       const profile = userSnap.data();
       const role = Array.isArray(profile.role) ? profile.role[0] : profile.role;
       const fullName =
         `${profile.firstName} ${profile.lastName}`.trim() ||
         deriveName(user.email);
+
+      // 🔥 1) Login Redux
       dispatch(
         loginSuccess({
           uid: user.uid,
@@ -81,6 +89,19 @@ export default function LoginPage() {
 
       setLoggedInRole(role);
       setSuccess(true);
+
+      // 🔥 2) If super-admin → fetch employees + logs
+      if (role === "super-admin") {
+        const [employeesData, logsData] = await Promise.all([
+          fetchEmployees(),
+          fetchLogsFromFirestore(),
+        ]);
+
+        dispatch(setEmployees(employeesData));
+        dispatch(setLogs(logsData));
+      }
+
+      // 🔥 3) Redirect
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       timeoutRef.current = setTimeout(() => navigate(redirectTo), 800);
     } catch (err) {
@@ -93,7 +114,7 @@ export default function LoginPage() {
   useEffect(() => {
     const loadUsers = async () => {
       const data = await fetchUsers();
-      setUsers(da5ta);
+      setUsers(data);
     };
     loadUsers();
   }, []);

@@ -1,18 +1,31 @@
 import { db, storage } from "../firebase";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
-// Upload resume file → returns download URL
+// ===========================
+// 1) Upload resume to Storage
+// ===========================
 export const uploadResume = async (file, jobId, email) => {
-  const filename = `${jobId}_${email}_${file.name}`;
-  const storageRef = ref(storage, `resumes/${filename}`);
+  const safeEmail = email.replace(/[@.]/g, "_");
+  const cleanName = file.name.replace(/\s+/g, "_");
 
-  await uploadBytes(storageRef, file);
-  return await getDownloadURL(storageRef);
+  const filePath = `resumes/${jobId}_${safeEmail}_${cleanName}`;
+  const storageRef = ref(storage, filePath);
+
+  const snapshot = await uploadBytes(storageRef, file);
+  return await getDownloadURL(snapshot.ref);
 };
 
-// Save candidate in Firestore
+// ===========================
+// 2) Save Candidate to Firestore
+// ===========================
 export const createCandidate = async (candidateData) => {
-  const docRef = await addDoc(collection(db, "candidates"), candidateData);
+  const payload = {
+    ...candidateData,
+    createdAt: serverTimestamp(), // safer than Date.now()
+  };
+
+  const docRef = await addDoc(collection(db, "candidates"), payload);
+
   return { id: docRef.id, ...candidateData };
 };
