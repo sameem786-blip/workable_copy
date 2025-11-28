@@ -21,7 +21,7 @@ import CategoryIcon from "@mui/icons-material/Category";
 import { updateJobStatus, updateJobFormFields } from "../store/jobsSlice";
 import { addLog } from "../store/logsSlice";
 import { formFieldTypes } from "../constants/formFieldTypes";
-import { getJob } from "../services/jobService";
+import { getJob } from "../services/job.service";
 
 export default function JobDetailPage() {
   const { id } = useParams();

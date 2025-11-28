@@ -1,12 +1,14 @@
 import { createSlice, nanoid } from "@reduxjs/toolkit";
-import { users as initialUsers } from "../data/users";
 
 const employeesSlice = createSlice({
   name: "employees",
   initialState: {
-    list: initialUsers,
+    list: [],
   },
   reducers: {
+    setEmployees(state, action) {
+      state.list = action.payload;
+    },
     addEmployee: {
       reducer: (state, action) => {
         state.list.push(action.payload);
@@ -14,7 +16,6 @@ const employeesSlice = createSlice({
       prepare: (employee) => ({
         payload: {
           ...employee,
-          role: "admin",
           id: nanoid(),
         },
       }),
@@ -22,5 +23,5 @@ const employeesSlice = createSlice({
   },
 });
 
-export const { addEmployee } = employeesSlice.actions;
+export const { setEmployees, addEmployee } = employeesSlice.actions;
 export default employeesSlice.reducer;

@@ -13,7 +13,7 @@ import {
 } from "@mui/material";
 
 import { addLog } from "../store/logsSlice";
-import { createCandidate, uploadResume } from "../services/candidateService";
+import { createCandidate, uploadResume } from "../services/candidate.service";
 
 export default function ApplyJobPage() {
   const { id } = useParams();

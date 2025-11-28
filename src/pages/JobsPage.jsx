@@ -16,7 +16,7 @@ import JobRow from "../components/JobRow";
 import EmptyState from "../components/EmptyState";
 import { setAllJobs } from "../store/jobsSlice";
 
-import { fetchJobs } from "../services/jobService";
+import { fetchJobs } from "../services/job.service";
 
 // Helper: generate unique options
 function uniqueOptions(items, key) {

@@ -20,7 +20,7 @@ import LockIcon from "@mui/icons-material/Lock";
 import MailIcon from "@mui/icons-material/Mail";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { loginSuccess } from "../store/authSlice";
-import { fetchUsers } from "../services/userService";
+import { fetchUsers } from "../services/user.service";
 
 export default function LoginPage() {
   const dispatch = useDispatch();

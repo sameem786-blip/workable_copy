@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import {
   Box,
   Button,
@@ -13,20 +14,43 @@ import {
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 
+import { setEmployees } from "../store/employeesSlice";
+import { fetchEmployees } from "../services/employee.service";
+
 export default function EmployeesPage() {
-  const employees = useSelector((state) => state.employees.list);
+  const dispatch = useDispatch();
   const navigate = useNavigate();
+  const employees = useSelector((state) => state.employees.list);
+
+  // Load employees from Firebase
+  useEffect(() => {
+    const loadEmployees = async () => {
+      const data = await fetchEmployees();
+      dispatch(setEmployees(data));
+    };
+
+    loadEmployees();
+  }, [dispatch]);
 
   return (
     <Box sx={{ mt: 2 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        sx={{ mb: 2 }}
+      >
         <Typography variant="h5" sx={{ fontWeight: 800 }}>
           Employees
         </Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate("/employees/new")}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => navigate("/employees/new")}
+        >
           Add new
         </Button>
       </Stack>
@@ -43,6 +67,7 @@ export default function EmployeesPage() {
                   <TableCell>Department</TableCell>
                 </TableRow>
               </TableHead>
+
               <TableBody>
                 {employees.map((employee) => (
                   <TableRow
@@ -51,9 +76,11 @@ export default function EmployeesPage() {
                     sx={{ cursor: "pointer" }}
                     onClick={() => navigate(`/employees/${employee.id}`)}
                   >
-                    <TableCell sx={{ fontWeight: 700 }}>{employee.name || "—"}</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>
+                      {employee.firstName + " " + employee.lastName}
+                    </TableCell>
                     <TableCell>{employee.email}</TableCell>
-                    <TableCell sx={{ textTransform: "capitalize" }}>{employee.role}</TableCell>
+                    <TableCell>{employee.role || "—"}</TableCell>
                     <TableCell>{employee.department || "—"}</TableCell>
                   </TableRow>
                 ))}

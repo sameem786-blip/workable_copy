@@ -8,47 +8,91 @@ import {
   Stack,
   TextField,
   Typography,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
+
 import { addEmployee } from "../store/employeesSlice";
 import { addLog } from "../store/logsSlice";
+import { createEmployee } from "../services/employee.service";
 
 const roleOptions = ["admin"];
-const departmentOptions = ["Operations", "Engineering", "Product", "People", "Marketing", "Customer Success"];
+const departmentOptions = [
+  "Operations",
+  "Engineering",
+  "Product",
+  "People",
+  "Marketing",
+  "Customer Success",
+];
 
 export default function AddEmployeePage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const user = useSelector((state) => state.auth.user);
+
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
+
   const [form, setForm] = useState({
-    name: "",
+    firstName: "",
+    lastName: "",
     email: "",
     department: "",
     password: "12345678",
-    role: "admin",
+    role: roleOptions[0],
   });
 
   const handleChange = (field) => (event) => {
     setForm((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
-  const handleSubmit = (event) => {
+  // --------------------------------------------------------
+  // ✅ Correct Firebase Submit Handler
+  // --------------------------------------------------------
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!form.department) return;
-    const action = addEmployee(form);
-    dispatch(action);
-    const newEmployee = action.payload;
-    dispatch(
-      addLog({
-        actor: { name: user?.name || "User", email: user?.email || "" },
-        entityId: newEmployee.id,
-        entityName: newEmployee.name || newEmployee.email,
-        entityType: "employee",
-        actionLabel: "created",
-      })
-    );
-    navigate(`/employees/${newEmployee.id}`);
+
+    if (!form.department) {
+      setError("Please select a department.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+
+      // 1️⃣ Create employee in Firestore
+      const created = await createEmployee(form); // <-- real API call!
+
+      // 2️⃣ Update Redux store
+      dispatch(addEmployee({ id: created.id, ...form }));
+
+      // 3️⃣ Log the action
+      dispatch(
+        addLog({
+          actor: { name: user?.name || "User", email: user?.email || "" },
+          entityId: created.id,
+          entityName: `${form.firstName} ${form.lastName}`.trim(),
+          entityType: "employee",
+          actionLabel: "created",
+        })
+      );
+
+      // 4️⃣ Show success snackbar
+      setSuccess(true);
+
+      // 5️⃣ Redirect after brief delay
+      setTimeout(() => navigate(`/employees/${created.id}`), 1200);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to create employee. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -75,8 +119,27 @@ export default function AddEmployeePage() {
           </Stack>
 
           <Stack component="form" spacing={2} onSubmit={handleSubmit}>
-            <TextField label="Full name" required value={form.name} onChange={handleChange("name")} />
-            <TextField label="Work email" type="email" required value={form.email} onChange={handleChange("email")} />
+            <TextField
+              label="First name"
+              required
+              value={form.firstName}
+              onChange={handleChange("firstName")}
+            />
+            <TextField
+              label="Last name"
+              required
+              value={form.lastName}
+              onChange={handleChange("lastName")}
+            />
+
+            <TextField
+              label="Work email"
+              type="email"
+              required
+              value={form.email}
+              onChange={handleChange("email")}
+            />
+
             <TextField
               label="Department"
               required
@@ -90,13 +153,15 @@ export default function AddEmployeePage() {
                 </MenuItem>
               ))}
             </TextField>
-            <TextField label="Role" value={form.role} select disabled>
-              {roleOptions.map((role) => (
+
+            <TextField label="Role" value={"admin"} select disabled >
+               {roleOptions.map((role) => (
                 <MenuItem key={role} value={role}>
                   {role}
                 </MenuItem>
               ))}
             </TextField>
+
             <TextField
               label="Password"
               type="password"
@@ -105,9 +170,10 @@ export default function AddEmployeePage() {
               onChange={handleChange("password")}
               helperText="Password must be 8 characters. Default is 12345678."
             />
+
             <Stack direction="row" spacing={1.5}>
-              <Button type="submit" variant="contained">
-                Save employee
+              <Button type="submit" variant="contained" disabled={loading}>
+                {loading ? "Saving..." : "Save employee"}
               </Button>
               <Button variant="text" onClick={() => navigate("/employees")}>
                 Cancel
@@ -116,6 +182,30 @@ export default function AddEmployeePage() {
           </Stack>
         </CardContent>
       </Card>
+
+      {/* SUCCESS SNACKBAR */}
+      <Snackbar
+        open={success}
+        autoHideDuration={2500}
+        onClose={() => setSuccess(false)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert severity="success" variant="filled">
+          Employee created successfully!
+        </Alert>
+      </Snackbar>
+
+      {/* ERROR SNACKBAR */}
+      <Snackbar
+        open={!!error}
+        autoHideDuration={3000}
+        onClose={() => setError("")}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert severity="error" variant="filled">
+          {error}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

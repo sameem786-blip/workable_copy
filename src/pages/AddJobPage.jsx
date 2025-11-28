@@ -16,7 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { addJob } from "../store/jobsSlice";
 import { addLog } from "../store/logsSlice";
 import { formFieldTypes } from "../constants/formFieldTypes";
-import { createJob } from "../services/jobService";
+import { createJob } from "../services/job.service";
 
 const typeOptions = ["Full-time", "Part-time", "Contract"];
 const departmentOptions = [
