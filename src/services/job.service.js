@@ -1,5 +1,13 @@
 import { db } from "../firebase";
-import { collection, addDoc, doc, updateDoc, deleteDoc, getDoc, getDocs } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  doc,
+  updateDoc,
+  deleteDoc,
+  getDoc,
+  getDocs,
+} from "firebase/firestore";
 
 // Create job
 export const createJob = async (jobData) => {
@@ -10,7 +18,7 @@ export const createJob = async (jobData) => {
 // Get all jobs
 export const fetchJobs = async () => {
   const snapshot = await getDocs(collection(db, "jobs"));
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 };
 
 // Get single job

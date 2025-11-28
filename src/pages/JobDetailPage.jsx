@@ -11,7 +11,7 @@ import {
   Tabs,
   Tab,
   TextField,
-  MenuItem
+  MenuItem,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import WorkOutlineIcon from "@mui/icons-material/WorkOutline";
@@ -21,7 +21,7 @@ import CategoryIcon from "@mui/icons-material/Category";
 import { updateJobStatus, updateJobFormFields } from "../store/jobsSlice";
 import { addLog } from "../store/logsSlice";
 import { formFieldTypes } from "../constants/formFieldTypes";
-import { getJob } from "../services/job.service";
+import { getJob, updateJob } from "../services/job.service";
 
 export default function JobDetailPage() {
   const { id } = useParams();
@@ -77,18 +77,43 @@ export default function JobDetailPage() {
     );
   }
 
-  const handleStatusChange = (nextStatus) => {
-    dispatch(updateJobStatus({ id: job.id, status: nextStatus }));
+  const handleStatusChange = async (nextStatus) => {
+    try {
+      // 1️⃣ Update Firestore
+      await updateJob(job.id, {
+        status: nextStatus,
+        updatedAt: Date.now(),
+      });
 
-    dispatch(
-      addLog({
+      // 2️⃣ Update Redux
+      dispatch(updateJobStatus({ id: job.id, status: nextStatus }));
+
+      // 3️⃣ Add log locally
+      dispatch(
+        addLog({
+          actor: { name: user?.name || "User", email: user?.email || "" },
+          entityId: job.id,
+          entityName: job.title,
+          entityType: "job",
+          actionLabel:
+            nextStatus === "live" ? "published job" : "marked job as draft",
+        })
+      );
+
+      // 4️⃣ Save log in Firestore
+      await addLog({
         actor: { name: user?.name || "User", email: user?.email || "" },
         entityId: job.id,
         entityName: job.title,
         entityType: "job",
-        actionLabel: nextStatus === "live" ? "published job" : "marked job as draft",
-      })
-    );
+        actionLabel:
+          nextStatus === "live" ? "published job" : "marked job as draft",
+        timestamp: Date.now(),
+      });
+    } catch (err) {
+      console.error("Failed to update job status", err);
+      alert("Failed to change job status. Try again.");
+    }
   };
 
   const handleFieldChange = (index, key, value) => {
@@ -102,7 +127,7 @@ export default function JobDetailPage() {
   const handleAddField = () => {
     setEditableFields((prev) => [
       ...prev,
-      { label: "", required: false, inputType: "text" }
+      { label: "", required: false, inputType: "text" },
     ]);
   };
 
@@ -124,7 +149,11 @@ export default function JobDetailPage() {
 
   return (
     <Box sx={{ mt: 2, mb: 6 }}>
-      <Button startIcon={<ArrowBackIcon />} onClick={() => navigate("/jobs")} sx={{ mb: 2 }}>
+      <Button
+        startIcon={<ArrowBackIcon />}
+        onClick={() => navigate("/jobs")}
+        sx={{ mb: 2 }}
+      >
         Back to all jobs
       </Button>
 
@@ -134,8 +163,16 @@ export default function JobDetailPage() {
         </Typography>
 
         <Stack direction="row" spacing={1} flexWrap="wrap">
-          <Chip icon={<CategoryIcon />} label={job.department} variant="outlined" />
-          <Chip icon={<WorkOutlineIcon />} label={job.type} variant="outlined" />
+          <Chip
+            icon={<CategoryIcon />}
+            label={job.department}
+            variant="outlined"
+          />
+          <Chip
+            icon={<WorkOutlineIcon />}
+            label={job.type}
+            variant="outlined"
+          />
           <Chip icon={<PlaceIcon />} label={job.location} variant="outlined" />
           <StatusChip status={job.status} />
         </Stack>
@@ -150,7 +187,11 @@ export default function JobDetailPage() {
       {/* Admin Controls */}
       {user && (user.role === "admin" || user.role === "super-admin") ? (
         <>
-          <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mt: 1, borderBottom: "1px solid #e5e7eb" }}>
+          <Tabs
+            value={tab}
+            onChange={(_, value) => setTab(value)}
+            sx={{ mt: 1, borderBottom: "1px solid #e5e7eb" }}
+          >
             <Tab label="Job details" value="details" />
             <Tab label="Form fields" value="form" />
           </Tabs>
@@ -158,16 +199,24 @@ export default function JobDetailPage() {
           {/* DETAILS TAB */}
           {tab === "details" && (
             <Stack spacing={2} sx={{ mt: 3 }}>
-              <Typography sx={{ color: "#334155", lineHeight: 1.7 }}>{job.description}</Typography>
+              <Typography sx={{ color: "#334155", lineHeight: 1.7 }}>
+                {job.description}
+              </Typography>
 
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
                 {job.status !== "live" && (
-                  <Button variant="contained" onClick={() => handleStatusChange("live")}>
+                  <Button
+                    variant="contained"
+                    onClick={() => handleStatusChange("live")}
+                  >
                     Publish job
                   </Button>
                 )}
                 {job.status !== "draft" && (
-                  <Button variant="outlined" onClick={() => handleStatusChange("draft")}>
+                  <Button
+                    variant="outlined"
+                    onClick={() => handleStatusChange("draft")}
+                  >
                     Mark as draft
                   </Button>
                 )}
@@ -179,18 +228,26 @@ export default function JobDetailPage() {
           {tab === "form" && (
             <Stack spacing={2} sx={{ mt: 3 }}>
               {editableFields.map((field, index) => (
-                <Stack key={index} direction={{ xs: "column", sm: "row" }} spacing={1}>
+                <Stack
+                  key={index}
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={1}
+                >
                   <TextField
                     label="Field label"
                     value={field.label}
-                    onChange={(e) => handleFieldChange(index, "label", e.target.value)}
+                    onChange={(e) =>
+                      handleFieldChange(index, "label", e.target.value)
+                    }
                     sx={{ flex: 1 }}
                   />
                   <TextField
                     label="Input type"
                     select
                     value={field.inputType}
-                    onChange={(e) => handleFieldChange(index, "inputType", e.target.value)}
+                    onChange={(e) =>
+                      handleFieldChange(index, "inputType", e.target.value)
+                    }
                     sx={{ width: 200 }}
                   >
                     {formFieldTypes.map((type) => (
@@ -203,7 +260,13 @@ export default function JobDetailPage() {
                     label="Required"
                     select
                     value={field.required ? "required" : "optional"}
-                    onChange={(e) => handleFieldChange(index, "required", e.target.value === "required")}
+                    onChange={(e) =>
+                      handleFieldChange(
+                        index,
+                        "required",
+                        e.target.value === "required"
+                      )
+                    }
                     sx={{ width: 200 }}
                   >
                     <MenuItem value="required">Required</MenuItem>
@@ -225,8 +288,14 @@ export default function JobDetailPage() {
       ) : (
         <>
           {/* Non-admin view */}
-          <Typography sx={{ color: "#334155", lineHeight: 1.7 }}>{job.description}</Typography>
-          <Button variant="contained" size="large" onClick={() => navigate(`/jobs/${job.id}/apply`)}>
+          <Typography sx={{ color: "#334155", lineHeight: 1.7 }}>
+            {job.description}
+          </Typography>
+          <Button
+            variant="contained"
+            size="large"
+            onClick={() => navigate(`/jobs/${job.id}/apply`)}
+          >
             Apply now
           </Button>
         </>
@@ -237,5 +306,11 @@ export default function JobDetailPage() {
 
 function StatusChip({ status }) {
   const color = status === "live" ? "success" : "default";
-  return <Chip label={status === "live" ? "Live" : "Draft"} color={color} variant="outlined" />;
+  return (
+    <Chip
+      label={status === "live" ? "Live" : "Draft"}
+      color={color}
+      variant="outlined"
+    />
+  );
 }
