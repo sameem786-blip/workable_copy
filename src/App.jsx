@@ -1,5 +1,12 @@
-import { useState } from "react";
-import { BrowserRouter, Link as RouterLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import {
+  BrowserRouter,
+  Link as RouterLink,
+  Navigate,
+  Route,
+  Routes,
+  useNavigate,
+} from "react-router-dom";
 import {
   AppBar,
   Avatar,
@@ -15,6 +22,8 @@ import {
   Typography,
 } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
+import HeaderActions from "./components/HeaderActions";
+import NavLinks from "./components/NavLinks";
 import JobsPage from "./pages/JobsPage";
 import JobDetailPage from "./pages/JobDetailPage";
 import LoginPage from "./pages/LoginPage";
@@ -26,12 +35,55 @@ import EmployeeProfilePage from "./pages/EmployeeProfilePage";
 import ApplyJobPage from "./pages/ApplyJobPage";
 import CandidatesPage from "./pages/CandidatesPage";
 import CandidateDetailPage from "./pages/CandidateDetailPage";
-import { logout } from "./store/authSlice";
+import {
+  RequireGuest,
+  RequireAdminOrSuper,
+  RequireSuperAdmin,
+} from "./components/RootGuards";
+
+import { auth } from "./firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { getUserProfile } from "./services/user.service";
+
+import { loginSuccess, logout } from "./store/authSlice";
+
 import "./App.css";
 
 function App() {
+  const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
   const isSuperAdmin = user?.role === "super-admin";
+
+  // Prevent UI flashing before Firebase syncs
+  const [authLoading, setAuthLoading] = useState(true);
+
+  // ✅ Restore user on refresh
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const profile = await getUserProfile(firebaseUser.uid);
+
+        dispatch(
+          loginSuccess({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            ...profile,
+          })
+        );
+      } else {
+        dispatch(logout());
+      }
+
+      setAuthLoading(false);
+    });
+
+    return () => unsub();
+  }, [dispatch]);
+
+  // ⛔ Prevent rendering until Firebase restores user
+  if (authLoading) {
+    return <div style={{ padding: 40 }}>Loading...</div>;
+  }
 
   return (
     <BrowserRouter>
@@ -47,17 +99,32 @@ function App() {
             backdropFilter: "blur(12px)",
           }}
         >
-          <Toolbar sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 3 }}>
+          <Toolbar
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 3,
+            }}
+          >
             <Box sx={{ display: "flex", alignItems: "center", gap: 3 }}>
               <Typography
                 variant="h6"
                 component={RouterLink}
                 to="/jobs"
-                sx={{ fontWeight: 800, letterSpacing: 0.5, textDecoration: "none", color: "inherit" }}
+                sx={{
+                  fontWeight: 800,
+                  letterSpacing: 0.5,
+                  textDecoration: "none",
+                  color: "inherit",
+                }}
               >
                 XYZ Careers
               </Typography>
-              <NavLinks isLoggedIn={Boolean(user)} isSuperAdmin={isSuperAdmin} />
+              <NavLinks
+                isLoggedIn={Boolean(user)}
+                isSuperAdmin={isSuperAdmin}
+              />
             </Box>
             <HeaderActions />
           </Toolbar>
@@ -68,6 +135,7 @@ function App() {
             <Routes>
               <Route path="/jobs" element={<JobsPage />} />
               <Route path="/jobs/:id" element={<JobDetailPage />} />
+
               <Route
                 path="/jobs/:id/apply"
                 element={
@@ -76,6 +144,7 @@ function App() {
                   </RequireGuest>
                 }
               />
+
               <Route
                 path="/jobs/new"
                 element={
@@ -84,7 +153,9 @@ function App() {
                   </RequireAdminOrSuper>
                 }
               />
+
               <Route path="/login" element={<LoginPage />} />
+
               <Route
                 path="/employees"
                 element={
@@ -93,6 +164,7 @@ function App() {
                   </RequireSuperAdmin>
                 }
               />
+
               <Route
                 path="/employees/new"
                 element={
@@ -101,6 +173,7 @@ function App() {
                   </RequireSuperAdmin>
                 }
               />
+
               <Route
                 path="/employees/:id"
                 element={
@@ -109,6 +182,7 @@ function App() {
                   </RequireSuperAdmin>
                 }
               />
+
               <Route
                 path="/logs"
                 element={
@@ -117,6 +191,7 @@ function App() {
                   </RequireAdminOrSuper>
                 }
               />
+
               <Route
                 path="/candidates"
                 element={
@@ -125,6 +200,7 @@ function App() {
                   </RequireAdminOrSuper>
                 }
               />
+
               <Route
                 path="/candidates/:id"
                 element={
@@ -133,6 +209,7 @@ function App() {
                   </RequireAdminOrSuper>
                 }
               />
+
               <Route path="*" element={<Navigate to="/jobs" replace />} />
             </Routes>
           </Container>
@@ -140,110 +217,6 @@ function App() {
       </Box>
     </BrowserRouter>
   );
-}
-
-function HeaderActions() {
-  const navigate = useNavigate();
-  const dispatch = useDispatch();
-  const user = useSelector((state) => state.auth.user);
-  const [anchorEl, setAnchorEl] = useState(null);
-  const open = Boolean(anchorEl);
-
-  const handleAvatarClick = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleLogout = () => {
-    dispatch(logout());
-    setAnchorEl(null);
-    navigate("/login");
-  };
-
-  return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-      {user ? (
-        <>
-          <IconButton onClick={handleAvatarClick} size="small" sx={{ p: 0 }}>
-            <Avatar sx={{ width: 36, height: 36, background: "#111827" }}>
-              {(user.name || user.email || "U").charAt(0).toUpperCase()}
-            </Avatar>
-          </IconButton>
-          <Menu anchorEl={anchorEl} open={open} onClose={handleClose} anchorOrigin={{ vertical: "bottom", horizontal: "right" }}>
-            <MenuItem disabled>
-              <Typography sx={{ fontWeight: 700 }}>{user.name || "User"}</Typography>
-            </MenuItem>
-            <MenuItem disabled>
-              <Typography variant="body2" sx={{ color: "#475569" }}>
-                {user.email}
-              </Typography>
-            </MenuItem>
-            <Divider />
-            <MenuItem onClick={handleLogout}>Sign out</MenuItem>
-          </Menu>
-        </>
-      ) : (
-        <Button variant="contained" color="primary" sx={{ borderRadius: 999, px: 2.5 }} onClick={() => navigate("/login")}>
-          Login
-        </Button>
-      )}
-    </Box>
-  );
-}
-
-function NavLinks({ isLoggedIn, isSuperAdmin }) {
-  const user = useSelector((state) => state.auth.user);
-  if (!isLoggedIn) return null;
-  return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 2.5, color: "#0f172a", fontWeight: 600 }}>
-      <Typography component={RouterLink} to="/jobs" sx={{ textDecoration: "none", color: "inherit" }}>
-        Jobs
-      </Typography>
-      <Typography component={RouterLink} to="/candidates" sx={{ textDecoration: "none", color: "inherit", opacity: 0.7 }}>
-        Candidates
-      </Typography>
-      {(user?.role === "admin" || isSuperAdmin) && (
-        <Typography component={RouterLink} to="/logs" sx={{ textDecoration: "none", color: "inherit", opacity: 0.7 }}>
-          Logs
-        </Typography>
-      )}
-      {isSuperAdmin && (
-        <>
-          <Divider orientation="vertical" flexItem />
-          <Typography component={RouterLink} to="/employees" sx={{ textDecoration: "none", color: "inherit", opacity: 0.7 }}>
-            Employees
-          </Typography>
-        </>
-      )}
-    </Box>
-  );
-}
-
-function RequireSuperAdmin({ children }) {
-  const user = useSelector((state) => state.auth.user);
-  if (!user || user.role !== "super-admin") {
-    return <Navigate to="/jobs" replace />;
-  }
-  return children;
-}
-
-function RequireAdminOrSuper({ children }) {
-  const user = useSelector((state) => state.auth.user);
-  if (!user || (user.role !== "admin" && user.role !== "super-admin")) {
-    return <Navigate to="/jobs" replace />;
-  }
-  return children;
-}
-
-function RequireGuest({ children }) {
-  const user = useSelector((state) => state.auth.user);
-  if (user) {
-    return <Navigate to="/jobs" replace />;
-  }
-  return children;
 }
 
 export default App;
