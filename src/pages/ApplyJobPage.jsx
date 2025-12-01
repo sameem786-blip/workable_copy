@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { addCandidate } from "../store/candidatesSlice";
 
 import {
   Box,
@@ -78,14 +79,14 @@ export default function ApplyJobPage() {
     }
 
     try {
-      // 🔥 1) Upload resume to Firebase Storage
+      // Upload resume
       const resumeURL = await uploadResume(
         applicant.resumeFile,
         job.id,
         applicant.email
       );
 
-      // 🔥 2) Save candidate to Firestore
+      // Prepare candidate data
       const candidateData = {
         jobId: job.id,
         jobTitle: job.title,
@@ -101,10 +102,21 @@ export default function ApplyJobPage() {
         })),
         createdAt: new Date().toISOString(),
       };
-      console.log("Submitting Candidate:", candidateData);
+
+      // Save to Firestore
       const newCandidate = await createCandidate(candidateData);
 
-      // 🔥 3) Add Activity Log (Redux)
+      // -------------------------
+      //  ADD TO REDUX STORE ❤️
+      // -------------------------
+      dispatch(
+        addCandidate({
+          id: newCandidate.id, // Firestore ID
+          ...candidateData,
+        })
+      );
+
+      // Add log entry
       dispatch(
         addLog({
           actor: {
@@ -121,12 +133,16 @@ export default function ApplyJobPage() {
       navigate("/jobs");
     } catch (err) {
       console.error("Candidate Submit Failed:", err);
-      alert("There was an error submitting your application. Please try again.");
+      alert(
+        "There was an error submitting your application. Please try again."
+      );
     }
   };
 
   return (
-    <Box sx={{ display: "grid", placeItems: "center", minHeight: "60vh", py: 4 }}>
+    <Box
+      sx={{ display: "grid", placeItems: "center", minHeight: "60vh", py: 4 }}
+    >
       <Card sx={{ maxWidth: 720, borderRadius: 3 }}>
         <CardContent>
           <Typography variant="h5" sx={{ mb: 2, fontWeight: 800 }}>
@@ -181,7 +197,7 @@ export default function ApplyJobPage() {
               onChange={(e) =>
                 setApplicant((prev) => ({
                   ...prev,
-                   resumeFile: e.target.files?.[0] || null,
+                  resumeFile: e.target.files?.[0] || null,
                 }))
               }
               helperText={applicant.resumeFile?.name || "Upload resume"}
@@ -199,7 +215,10 @@ export default function ApplyJobPage() {
               <Button type="submit" variant="contained">
                 Submit application
               </Button>
-              <Button variant="text" onClick={() => navigate(`/jobs/${job.id}`)}>
+              <Button
+                variant="text"
+                onClick={() => navigate(`/jobs/${job.id}`)}
+              >
                 Cancel
               </Button>
             </Stack>

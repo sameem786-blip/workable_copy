@@ -11,12 +11,21 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { loadCandidates } from "../store/candidatesSlice";
 
 export default function CandidatesPage() {
-  const candidates = useSelector((state) => state.candidates.list);
+  const dispatch = useDispatch();
   const navigate = useNavigate();
+
+  const { list: candidates, loading } = useSelector((state) => state.candidates);
+
+  // 🔥 Load candidates from Firestore on page load
+  useEffect(() => {
+    dispatch(loadCandidates());
+  }, [dispatch]);
 
   return (
     <Box sx={{ mt: 2 }}>
@@ -37,13 +46,31 @@ export default function CandidatesPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {candidates.length === 0 ? (
+
+                {/* 🔥 Loading indicator */}
+                {loading && (
                   <TableRow>
                     <TableCell colSpan={4}>
-                      <Typography sx={{ color: "#475569" }}>No candidates yet.</Typography>
+                      <Typography sx={{ color: "#475569" }}>
+                        Loading candidates...
+                      </Typography>
                     </TableCell>
                   </TableRow>
-                ) : (
+                )}
+
+                {/* No candidates */}
+                {!loading && candidates.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4}>
+                      <Typography sx={{ color: "#475569" }}>
+                        No candidates yet.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+
+                {/* Candidates list */}
+                {!loading &&
                   candidates.map((candidate) => (
                     <TableRow
                       key={candidate.id}
@@ -51,13 +78,18 @@ export default function CandidatesPage() {
                       sx={{ cursor: "pointer" }}
                       onClick={() => navigate(`/candidates/${candidate.id}`)}
                     >
-                      <TableCell sx={{ fontWeight: 700 }}>{candidate.name || "—"}</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>
+                        {candidate.name || "—"}
+                      </TableCell>
                       <TableCell>{candidate.email}</TableCell>
                       <TableCell>{candidate.jobTitle}</TableCell>
-                      <TableCell>{new Date(candidate.createdAt).toLocaleString()}</TableCell>
+                      <TableCell>
+                        {candidate.createdAt
+                          ? new Date(candidate.createdAt).toLocaleString()
+                          : "—"}
+                      </TableCell>
                     </TableRow>
-                  ))
-                )}
+                  ))}
               </TableBody>
             </Table>
           </TableContainer>

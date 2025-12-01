@@ -1,5 +1,5 @@
 import { db, storage } from "../firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, getDocs } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 // ===========================
@@ -13,7 +13,8 @@ export const uploadResume = async (file, jobId, email) => {
   const storageRef = ref(storage, filePath);
 
   const snapshot = await uploadBytes(storageRef, file);
-  return await getDownloadURL(snapshot.ref);
+  const downloadURL = await getDownloadURL(snapshot.ref);
+  return downloadURL;
 };
 
 // ===========================
@@ -28,4 +29,8 @@ export const createCandidate = async (candidateData) => {
   const docRef = await addDoc(collection(db, "candidates"), payload);
 
   return { id: docRef.id, ...candidateData };
+};
+export const getAllCandidates = async () => {
+  const querySnapshot = await getDocs(collection(db, "candidates"));
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 };
