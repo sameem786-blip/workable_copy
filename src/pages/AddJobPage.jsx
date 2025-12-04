@@ -1,3 +1,5 @@
+// src/pages/AddJobPage.jsx
+
 import { useState } from "react";
 import {
   Box,
@@ -10,15 +12,28 @@ import {
   Typography,
   Alert,
   Snackbar,
+  Chip,
 } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { addJob } from "../store/jobsSlice";
 import { addLog } from "../store/logsSlice";
-import { formFieldTypes } from "../constants/formFieldTypes";
 import { createJob } from "../services/job.service";
 
-const typeOptions = ["Full-time", "Part-time", "Contract"];
+// Select options
+const jobLocationTypes = ["On-site", "Remote", "Hybrid"];
+const employmentTypes = ["Full-time", "Part-time", "Contract"];
+const experienceLevels = ["Entry", "Mid", "Senior", "Lead"];
+const currencyOptions = ["USD", "EUR", "GBP", "AED"];
+const companyIndustryOptions = ["Technology", "Healthcare", "Finance"];
+const jobFunctionOptions = ["Engineering", "Sales", "Marketing"];
+const jobEducationOptions = [
+  "High School",
+  "Associate Degree",
+  "Bachelor's Degree",
+  "Master's Degree",
+  "PhD",
+];
 const departmentOptions = [
   "Engineering",
   "Product",
@@ -27,64 +42,113 @@ const departmentOptions = [
   "Marketing",
 ];
 
+/* ----------------------------------------------------------
+   ARRAY INPUT COMPONENT (Chip + TextField)
+----------------------------------------------------------- */
+
+const ArrayInput = ({ label, values, onAdd, onDelete }) => {
+  const [input, setInput] = useState("");
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && input.trim()) {
+      e.preventDefault();
+      onAdd(input.trim());
+      setInput("");
+    }
+  };
+
+  return (
+    <Box>
+      <Typography sx={{ mb: 1, fontWeight: 500 }}>{label}</Typography>
+
+      {/* Chips */}
+      <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mb: 1 }}>
+        {values.map((item, index) => (
+          <Chip
+            key={index}
+            label={item}
+            onDelete={() => onDelete(index)}
+            sx={{ mb: 1 }}
+          />
+        ))}
+      </Stack>
+
+      {/* Input */}
+      <TextField
+        placeholder={`Add ${label} (press Enter)`}
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        fullWidth
+      />
+    </Box>
+  );
+};
+
+/* ----------------------------------------------------------
+   MAIN COMPONENT
+----------------------------------------------------------- */
+
 export default function AddJobPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const user = useSelector((state) => state.auth.user);
 
-  // Form state
+  // Form State
   const [form, setForm] = useState({
     title: "",
     department: "",
-    location: "",
     type: "Full-time",
+    location: "",
     summary: "",
     description: "",
     status: "draft",
+
+    jobInfo: {
+      locationType: "",
+      requirements: [],
+      benefits: [],
+      jobFunction: "",
+      experience: "",
+      employmentType: "",
+      education: "",
+    },
+
+    companyInfo: {
+      industry: "",
+    },
+
+    salary: {
+      from: "",
+      to: "",
+      currency: "USD",
+    },
   });
 
-  const [formFields, setFormFields] = useState([
-    { label: "Resume", required: true, inputType: "file" },
-  ]);
+  // Update simple fields
+  const handleChange = (field) => (e) => {
+    setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  };
 
-  // Snackbar states
+  // Update nested form fields
+  const updateNested = (section, key, value) => {
+    setForm((prev) => ({
+      ...prev,
+      [section]: { ...prev[section], [key]: value },
+    }));
+  };
+
+  // Snackbar State
   const [success, setSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [error, setError] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Handlers
-  const handleChange = (field) => (event) => {
-    setForm((prev) => ({ ...prev, [field]: event.target.value }));
-  };
-
-  const handleAddField = () => {
-    setFormFields((prev) => [
-      ...prev,
-      { label: "", required: false, inputType: "text" },
-    ]);
-  };
-
-  const handleFieldChange = (index, key, value) => {
-    setFormFields((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index], [key]: value };
-      return next;
-    });
-  };
-
+  // Submit Handler
   const handleSubmit = async (event, statusOverride) => {
     event.preventDefault();
 
-    // Validation
-    if (
-      !form.department ||
-      !form.title ||
-      !form.location ||
-      !form.summary ||
-      !form.description ||
-      !form.type
-    ) {
+    if (!form.title || !form.location || !form.description) {
       setErrorMessage("Please fill out all required fields.");
       setError(true);
       return;
@@ -96,7 +160,15 @@ export default function AddJobPage() {
       ...form,
       status,
       posted: new Date().toISOString(),
-      formFields: formFields.filter((field) => field.label.trim()),
+
+      applicationFields: [
+        {
+          label: "Resume",
+          required: true,
+          inputType: "file",
+        },
+      ],
+
       createdBy: {
         name: user?.name || "Unknown",
         email: user?.email || "",
@@ -106,7 +178,6 @@ export default function AddJobPage() {
 
     try {
       const newJob = await createJob(job);
-
       dispatch(addJob(newJob));
 
       dispatch(
@@ -127,19 +198,21 @@ export default function AddJobPage() {
         navigate(`/jobs/${newJob.id}`);
       }, 1200);
     } catch (err) {
-      console.error("Error creating job:", err);
+      console.error(err);
       setErrorMessage("Failed to create job.");
       setError(true);
     }
   };
 
   return (
-    <Box sx={{ display: "grid", placeItems: "center", minHeight: "60vh", py: 4 }}>
+    <Box
+      sx={{ display: "grid", placeItems: "center", minHeight: "60vh", py: 4 }}
+    >
       <Card
         elevation={0}
         sx={{
           width: "100%",
-          maxWidth: 680,
+          maxWidth: 760,
           borderRadius: 3,
           border: "1px solid #e5e7eb",
           boxShadow: "0 18px 40px rgba(15, 23, 42, 0.08)",
@@ -152,101 +225,253 @@ export default function AddJobPage() {
               Create a new job
             </Typography>
             <Typography variant="body2" sx={{ color: "#475569" }}>
-              Fill out the details below. New jobs are logged and clickable from the activity log.
+              Fill out the job details below.
             </Typography>
           </Stack>
 
+          {/* FORM START */}
           <Stack
             component="form"
-            spacing={2}
+            spacing={3}
             onSubmit={(e) => handleSubmit(e, form.status)}
           >
-            <TextField label="Title" required value={form.title} onChange={handleChange("title")} />
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Job Details
+            </Typography>
+
+            <TextField
+              label="Job Title"
+              required
+              value={form.title}
+              onChange={handleChange("title")}
+            />
+
+            <TextField
+              label="Location"
+              required
+              value={form.location}
+              onChange={handleChange("location")}
+            />
+
+            <TextField
+              label="Description"
+              required
+              multiline
+              minRows={4}
+              value={form.description}
+              onChange={handleChange("description")}
+            />
+
+            {/* JOB INFO */}
+
+            <TextField
+              label="Job Location Type"
+              select
+              value={form.jobInfo.locationType}
+              onChange={(e) =>
+                updateNested("jobInfo", "locationType", e.target.value)
+              }
+            >
+              {jobLocationTypes.map((t) => (
+                <MenuItem key={t} value={t}>
+                  {t}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            {/* Requirements Array */}
+            <ArrayInput
+              label="Requirements"
+              values={form.jobInfo.requirements}
+              onAdd={(val) =>
+                updateNested("jobInfo", "requirements", [
+                  ...form.jobInfo.requirements,
+                  val,
+                ])
+              }
+              onDelete={(index) => {
+                const updated = [...form.jobInfo.requirements];
+                updated.splice(index, 1);
+                updateNested("jobInfo", "requirements", updated);
+              }}
+            />
+
+            {/* Benefits Array */}
+            <ArrayInput
+              label="Benefits"
+              values={form.jobInfo.benefits}
+              onAdd={(val) =>
+                updateNested("jobInfo", "benefits", [
+                  ...form.jobInfo.benefits,
+                  val,
+                ])
+              }
+              onDelete={(index) => {
+                const updated = [...form.jobInfo.benefits];
+                updated.splice(index, 1);
+                updateNested("jobInfo", "benefits", updated);
+              }}
+            />
+
+            {/* EMPLOYEE REQUIREMENTS */}
+
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Employee Requirements
+            </Typography>
+
+            <TextField
+              label="Employment Type"
+              select
+              value={form.jobInfo.employmentType}
+              onChange={(e) =>
+                updateNested("jobInfo", "employmentType", e.target.value)
+              }
+            >
+              {employmentTypes.map((t) => (
+                <MenuItem key={t} value={t}>
+                  {t}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              label="Experience Level"
+              select
+              value={form.jobInfo.experience}
+              onChange={(e) =>
+                updateNested("jobInfo", "experience", e.target.value)
+              }
+            >
+              {experienceLevels.map((lvl) => (
+                <MenuItem key={lvl} value={lvl}>
+                  {lvl}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              label="Education Requirement"
+              select
+              value={form.jobInfo.education}
+              onChange={(e) =>
+                updateNested("jobInfo", "education", e.target.value)
+              }
+            >
+              {jobEducationOptions.map((edu) => (
+                <MenuItem key={edu} value={edu}>
+                  {edu}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            {/* COMPANY INFO */}
+
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Company industry and Job function
+            </Typography>
+
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <TextField
-                label="Department"
-                required
+                label="Company industry"
                 select
-                value={form.department}
-                onChange={handleChange("department")}
+                value={form.companyInfo.industry}
+                onChange={(e) =>
+                  updateNested("companyInfo", "industry", e.target.value)
+                }
                 sx={{ flex: 1 }}
               >
-                {departmentOptions.map((dept) => (
-                  <MenuItem key={dept} value={dept}>
-                    {dept}
+                <MenuItem value="">
+                  <em>Select...</em>
+                </MenuItem>
+                {companyIndustryOptions.map((industry) => (
+                  <MenuItem key={industry} value={industry}>
+                    {industry}
                   </MenuItem>
                 ))}
               </TextField>
+
               <TextField
-                label="Type"
-                required
+                label="Job function"
                 select
-                value={form.type}
-                onChange={handleChange("type")}
-                sx={{ width: { xs: "100%", sm: 200 } }}
+                value={form.jobInfo.jobFunction}
+                onChange={(e) =>
+                  updateNested("jobInfo", "jobFunction", e.target.value)
+                }
+                sx={{ flex: 1 }}
               >
-                {typeOptions.map((type) => (
-                  <MenuItem key={type} value={type}>
-                    {type}
+                <MenuItem value="">
+                  <em>Select...</em>
+                </MenuItem>
+                {jobFunctionOptions.map((fn) => (
+                  <MenuItem key={fn} value={fn}>
+                    {fn}
                   </MenuItem>
                 ))}
               </TextField>
             </Stack>
-            <TextField label="Location" required value={form.location} onChange={handleChange("location")} />
-            <TextField label="Short summary" required multiline minRows={2} value={form.summary} onChange={handleChange("summary")} />
-            <TextField label="Description" required multiline minRows={4} value={form.description} onChange={handleChange("description")} />
 
-            <Stack spacing={1}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                Application form fields
-              </Typography>
-              {formFields.map((field, index) => (
-                <Stack key={index} direction={{ xs: "column", sm: "row" }} spacing={1} alignItems="center">
-                  <TextField
-                    label="Field label"
-                    value={field.label}
-                    onChange={(e) => handleFieldChange(index, "label", e.target.value)}
-                    sx={{ flex: 1 }}
-                  />
-                  <TextField
-                    label="Input type"
-                    select
-                    value={field.inputType}
-                    onChange={(e) => handleFieldChange(index, "inputType", e.target.value)}
-                    sx={{ width: { xs: "100%", sm: 200 } }}
-                  >
-                    {formFieldTypes.map((type) => (
-                      <MenuItem key={type.value} value={type.value}>
-                        {type.label}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                  <TextField
-                    label="Required"
-                    select
-                    value={field.required ? "required" : "optional"}
-                    onChange={(e) =>
-                      handleFieldChange(index, "required", e.target.value === "required")
-                    }
-                    sx={{ width: { xs: "100%", sm: 180 } }}
-                  >
-                    <MenuItem value="required">Required</MenuItem>
-                    <MenuItem value="optional">Optional</MenuItem>
-                  </TextField>
-                </Stack>
-              ))}
-              <Button variant="text" onClick={handleAddField} sx={{ alignSelf: "flex-start" }}>
-                Add field
-              </Button>
+            {/* SALARY */}
+
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Annual Salary
+            </Typography>
+
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField
+                label="From"
+                type="number"
+                value={form.salary.from}
+                onChange={(e) =>
+                  updateNested("salary", "from", e.target.value)
+                }
+                sx={{ flex: 1 }}
+              />
+
+              <TextField
+                label="To"
+                type="number"
+                value={form.salary.to}
+                onChange={(e) =>
+                  updateNested("salary", "to", e.target.value)
+                }
+                sx={{ flex: 1 }}
+              />
+
+              <TextField
+                label="Currency"
+                select
+                value={form.salary.currency}
+                onChange={(e) =>
+                  updateNested("salary", "currency", e.target.value)
+                }
+                sx={{ width: 150 }}
+              >
+                {currencyOptions.map((c) => (
+                  <MenuItem key={c} value={c}>
+                    {c}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Stack>
 
-            <Stack direction="row" spacing={1.5}>
-              <Button type="submit" variant="contained" onClick={(e) => handleSubmit(e, "live")}>
+            {/* BUTTONS */}
+
+            <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
+              <Button
+                type="submit"
+                variant="contained"
+                onClick={(e) => handleSubmit(e, "live")}
+              >
                 Create job
               </Button>
-              <Button variant="outlined" onClick={(e) => handleSubmit(e, "draft")}>
+
+              <Button
+                variant="outlined"
+                onClick={(e) => handleSubmit(e, "draft")}
+              >
                 Save as draft
               </Button>
+
               <Button variant="text" onClick={() => navigate("/jobs")}>
                 Cancel
               </Button>
@@ -255,26 +480,26 @@ export default function AddJobPage() {
         </CardContent>
       </Card>
 
-      {/* Success Snackbar */}
+      {/* SUCCESS SNACKBAR */}
       <Snackbar
         open={success}
         autoHideDuration={2500}
         onClose={() => setSuccess(false)}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
-        <Alert severity="success" variant="filled" onClose={() => setSuccess(false)}>
+        <Alert severity="success" variant="filled">
           {successMessage}
         </Alert>
       </Snackbar>
 
-      {/* Error Snackbar */}
+      {/* ERROR SNACKBAR */}
       <Snackbar
         open={error}
         autoHideDuration={2500}
         onClose={() => setError(false)}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
-        <Alert severity="error" variant="filled" onClose={() => setError(false)}>
+        <Alert severity="error" variant="filled">
           {errorMessage}
         </Alert>
       </Snackbar>

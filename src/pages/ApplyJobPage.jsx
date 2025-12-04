@@ -1,3 +1,4 @@
+// src/pages/ApplyJobPage.jsx
 import { useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Navigate, useNavigate, useParams } from "react-router-dom";

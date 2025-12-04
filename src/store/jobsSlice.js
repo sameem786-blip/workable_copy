@@ -1,3 +1,4 @@
+// src/store/jobsSlice.js
 import { createSlice, nanoid } from "@reduxjs/toolkit";
 
 const baseRequiredFields = [
