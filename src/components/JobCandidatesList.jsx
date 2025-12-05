@@ -22,7 +22,8 @@ import {
   Tooltip,
   Paper,
 } from "@mui/material";
-
+import { doc, updateDoc, arrayUnion } from "firebase/firestore";
+import { db } from "../firebase"; 
 import EmailIcon from "@mui/icons-material/Email";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import BlockIcon from "@mui/icons-material/Block";
@@ -35,6 +36,7 @@ import {
   getCandidatesByJob,
   sendEmailToCandidate,
 } from "../services/candidate.service";
+
 import { useSelector } from "react-redux";
 
 export default function JobCandidatesList({ jobId }) {
@@ -42,6 +44,9 @@ export default function JobCandidatesList({ jobId }) {
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
   const user = useSelector((state) => state.auth.user);
+
+  // Tabs
+  const [activeTab, setActiveTab] = useState("timeline");
 
   // Stage menu
   const [anchorEl, setAnchorEl] = useState(null);
@@ -85,6 +90,7 @@ export default function JobCandidatesList({ jobId }) {
     const loadCandidates = async () => {
       setLoading(true);
       const data = await getCandidatesByJob(jobId);
+      console.log("Loaded candidates:", data);
       setCandidates(data || []);
       if (data?.length > 0) setSelected(data[0]);
       setLoading(false);
@@ -92,34 +98,59 @@ export default function JobCandidatesList({ jobId }) {
     loadCandidates();
   }, [jobId]);
 
-  // ========== Handlers ==========
-
+  // HANDLERS
   const handleStageUpdate = async (stage) => {
     if (!selected) return;
+
+    // Backend API update
     await updateCandidateStage(selected.id, stage);
-    setSelected((prev) => ({ ...prev, stage }));
+
+    const newLog = {
+      type: "stage_change",
+      stage,
+      admin: user.name || "Admin",
+      date: new Date().toISOString(),
+    };
+
+    // Update Firestore
+    const candidateRef = doc(db, "candidates", selected.id);
+    await updateDoc(candidateRef, {
+      timeline: arrayUnion(newLog),
+    });
+
+    // Update local state
+    setSelected((prev) => ({
+      ...prev,
+      stage,
+      timeline: [...(prev.timeline || []), newLog],
+    }));
+
     setAnchorEl(null);
   };
 
   const handleAddComment = async () => {
     if (!commentText.trim() || !selected) return;
 
-    await addCandidateComment(
-      selected.id,
-      commentText,
-      user.name || "Admin Name"
-    );
+    await addCandidateComment(selected.id, commentText, user.name || "Admin");
 
+    const newCommentLog = {
+      type: "comment",
+      text: commentText,
+      admin: user.name || "Admin",
+      date: new Date().toISOString(),
+    };
+
+    // Save to Firestore
+    const candidateRef = doc(db, "candidates", selected.id);
+    await updateDoc(candidateRef, {
+      timeline: arrayUnion(newCommentLog),
+    });
+
+    // Update local state
     setSelected((prev) => ({
       ...prev,
-      comments: [
-        ...(prev.comments || []),
-        {
-          text: commentText,
-          admin: "Admin Name",
-          createdAt: new Date().toISOString(),
-        },
-      ],
+      comments: [...(prev.comments || []), newCommentLog],
+      timeline: [...(prev.timeline || []), newCommentLog],
     }));
 
     setCommentText("");
@@ -152,6 +183,26 @@ export default function JobCandidatesList({ jobId }) {
       user.name || "Admin"
     );
 
+    const newEmailLog = {
+      type: "email",
+      subject: emailSubject,
+      body: emailBody,
+      admin: user.name || "Admin",
+      date: new Date().toISOString(),
+    };
+
+    // Save to Firestore
+    const candidateRef = doc(db, "candidates", selected.id);
+    await updateDoc(candidateRef, {
+      timeline: arrayUnion(newEmailLog),
+    });
+
+    // Update local state
+    setSelected((prev) => ({
+      ...prev,
+      timeline: [...(prev.timeline || []), newEmailLog],
+    }));
+
     setEmailSubject("");
     setEmailBody("");
     setEmailOpen(false);
@@ -174,7 +225,10 @@ export default function JobCandidatesList({ jobId }) {
             <ListItemButton
               key={c.id}
               selected={selected?.id === c.id}
-              onClick={() => setSelected(c)}
+              onClick={() => {
+                setSelected(c);
+                setActiveTab("timeline");
+              }}
               sx={{
                 borderRadius: 2,
                 mb: 1,
@@ -212,11 +266,53 @@ export default function JobCandidatesList({ jobId }) {
                 sx={{ mt: 1 }}
               />
             </Box>
-            {selected.status && (
-              <Box sx={{ flexGrow: 1 }}>
-                <Typography sx={{ mt: 1 }}>{selected.status}</Typography>
-              </Box>
-            )}
+          </Box>
+
+          {/* TABS */}
+          <Box sx={{ mt: 3, borderBottom: "1px solid #ddd" }}>
+            <Stack direction="row" spacing={4}>
+              <Button
+                variant="text"
+                onClick={() => setActiveTab("profile")}
+                sx={{
+                  borderBottom:
+                    activeTab === "profile" ? "3px solid #1a73e8" : "none",
+                  borderRadius: 0,
+                  color: activeTab === "profile" ? "#1a73e8" : "gray",
+                  fontWeight: 600,
+                }}
+              >
+                Profile
+              </Button>
+
+              <Button
+                variant="text"
+                onClick={() => setActiveTab("timeline")}
+                sx={{
+                  borderBottom:
+                    activeTab === "timeline" ? "3px solid #1a73e8" : "none",
+                  borderRadius: 0,
+                  color: activeTab === "timeline" ? "#1a73e8" : "gray",
+                  fontWeight: 600,
+                }}
+              >
+                Timeline
+              </Button>
+
+              <Button
+                variant="text"
+                onClick={() => setActiveTab("comments")}
+                sx={{
+                  borderBottom:
+                    activeTab === "comments" ? "3px solid #1a73e8" : "none",
+                  borderRadius: 0,
+                  color: activeTab === "comments" ? "#1a73e8" : "gray",
+                  fontWeight: 600,
+                }}
+              >
+                Comments
+              </Button>
+            </Stack>
           </Box>
 
           {/* ACTION BAR */}
@@ -250,7 +346,6 @@ export default function JobCandidatesList({ jobId }) {
               </Tooltip>
             </Stack>
 
-            {/* Stage Button */}
             <Box>
               <Button
                 variant="contained"
@@ -278,45 +373,124 @@ export default function JobCandidatesList({ jobId }) {
             </Box>
           </Box>
 
-          <Divider sx={{ my: 2 }} />
+          {/* PROFILE TAB */}
+          {activeTab === "profile" && (
+            <Box sx={{ mt: 3 }}>
+              <Typography sx={{ fontWeight: 700, mb: 1 }}>
+                Contact Information
+              </Typography>
+              <Stack spacing={1}>
+                <Typography>Email: {selected.email}</Typography>
+                <Typography>Phone: {selected.contact}</Typography>
+              </Stack>
 
-          {/* CONTACT */}
-          <Typography sx={{ fontWeight: 700, mb: 1 }}>
-            Contact Information
-          </Typography>
-          <Stack spacing={1}>
-            <Typography>Email: {selected.email}</Typography>
-            <Typography>Phone: {selected.contact}</Typography>
-          </Stack>
+              <Divider sx={{ my: 3 }} />
 
-          <Divider sx={{ my: 3 }} />
-
-          {/* RESUME */}
-          <Typography sx={{ fontWeight: 700, mb: 1 }}>Resume</Typography>
-          {selected.resume ? (
-            <a href={selected.resume} target="_blank">
-              View Resume
-            </a>
-          ) : (
-            <Typography>No resume uploaded</Typography>
+              <Typography sx={{ fontWeight: 700, mb: 1 }}>Resume</Typography>
+              {selected.resume ? (
+                <a href={selected.resume} target="_blank">
+                  View Resume
+                </a>
+              ) : (
+                <Typography>No resume uploaded</Typography>
+              )}
+            </Box>
           )}
 
-          <Divider sx={{ my: 3 }} />
+          {/* TIMELINE TAB */}
+          {activeTab === "timeline" && (
+            <Box sx={{ mt: 3 }}>
+              <Typography sx={{ fontWeight: 700, mb: 2 }}>Timeline</Typography>
 
-          {/* COMMENTS */}
-          <Typography sx={{ fontWeight: 700, mb: 1 }}>
-            Admin Comments
-          </Typography>
-          <Stack spacing={1}>
-            {(selected.comments || []).map((c, index) => (
-              <Paper key={index} sx={{ p: 1.5, borderRadius: 2 }}>
-                <Typography>{c.text}</Typography>
-                <Typography sx={{ fontSize: 12, color: "gray", mt: 0.5 }}>
-                  {c.createdAt || c.date}
-                </Typography>
-              </Paper>
-            ))}
-          </Stack>
+              {(selected.timeline || []).length > 0 ? (
+                selected.timeline.map((item, index) => {
+                  if (item.type === "stage_change") {
+                    return (
+                      <Paper
+                        key={index}
+                        sx={{
+                          p: 2,
+                          borderRadius: 2,
+                          mb: 2,
+                          display: "flex",
+                          gap: 2,
+                        }}
+                      >
+                        <Chip
+                          label="Stage Changed"
+                          color="secondary"
+                          size="small"
+                          sx={{ mt: 0.5 }}
+                        />
+                        <Box>
+                          <Typography sx={{ fontWeight: 600 }}>
+                            Moved to {item.stage}
+                          </Typography>
+                          <Typography
+                            sx={{ fontSize: 12, color: "gray", mt: 1 }}
+                          >
+                            Updated by: {item.admin} •{" "}
+                            {new Date(item.date).toLocaleString()}
+                          </Typography>
+                        </Box>
+                      </Paper>
+                    );
+                  }
+
+                  if (item.type === "email") {
+                    return (
+                      <Paper
+                        key={index}
+                        sx={{
+                          p: 2,
+                          borderRadius: 2,
+                          mb: 2,
+                          display: "flex",
+                          gap: 2,
+                        }}
+                      >
+                        <EmailIcon sx={{ color: "#1a73e8", mt: 0.5 }} />
+                        <Box>
+                          <Typography sx={{ fontWeight: 600 }}>
+                            {item.subject}
+                          </Typography>
+                          <Typography sx={{ mt: 1 }}>{item.body}</Typography>
+                          <Typography
+                            sx={{ fontSize: 12, color: "gray", mt: 1 }}
+                          >
+                            Sent by: {item.admin} •{" "}
+                            {new Date(item.date).toLocaleString()}
+                          </Typography>
+                        </Box>
+                      </Paper>
+                    );
+                  }
+
+                  return null;
+                })
+              ) : (
+                <Typography>No activity yet.</Typography>
+              )}
+            </Box>
+          )}
+
+          {/* COMMENTS TAB */}
+          {activeTab === "comments" && (
+            <Box sx={{ mt: 3 }}>
+              <Typography sx={{ fontWeight: 700, mb: 1 }}>
+                Admin Comments
+              </Typography>
+
+              {(selected.comments || []).map((c, index) => (
+                <Paper key={index} sx={{ p: 1.5, borderRadius: 2, mb: 1 }}>
+                  <Typography>{c.text}</Typography>
+                  <Typography sx={{ fontSize: 12, color: "gray", mt: 0.5 }}>
+                    {c.createdAt}
+                  </Typography>
+                </Paper>
+              ))}
+            </Box>
+          )}
         </Card>
       )}
 

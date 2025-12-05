@@ -20,6 +20,7 @@ import { addCandidate } from "../../src/store/candidatesSlice";
 import { addLog } from "../../src/store/logsSlice";
 import {
   createCandidate,
+  uploadProfilePhoto,
   uploadResume,
 } from "../../src/services/candidate.service";
 
@@ -195,8 +196,16 @@ export default function JobApplicationForm({ job, isAdmin }) {
     }
 
     try {
+      // Upload resume
       const resumeURL = await uploadResume(
         applicant.resumeFile,
+        job.id,
+        applicant.email
+      );
+
+      // Upload profile photo
+      const photoURL = await uploadProfilePhoto(
+        applicant.photoFile,
         job.id,
         applicant.email
       );
@@ -209,7 +218,7 @@ export default function JobApplicationForm({ job, isAdmin }) {
         contact: applicant.contact,
         headline: applicant.headline,
         address: applicant.address,
-        photoFileName: applicant.photoFile?.name || null,
+        photoURL: photoURL || null, // store uploaded photo URL
         profileSummary: applicant.profileSummary,
         coverLetter: applicant.coverLetter,
         education,
@@ -226,19 +235,11 @@ export default function JobApplicationForm({ job, isAdmin }) {
 
       const newCandidate = await createCandidate(candidateData);
 
-      dispatch(
-        addCandidate({
-          id: newCandidate.id,
-          ...candidateData,
-        })
-      );
+      dispatch(addCandidate({ id: newCandidate.id, ...candidateData }));
 
       dispatch(
         addLog({
-          actor: {
-            name: candidateData.name,
-            email: candidateData.email,
-          },
+          actor: { name: candidateData.name, email: candidateData.email },
           entityId: newCandidate.id,
           entityName: candidateData.name,
           entityType: "candidate",
@@ -484,11 +485,7 @@ export default function JobApplicationForm({ job, isAdmin }) {
                       minRows={3}
                       value={exp.summary}
                       onChange={(e) =>
-                        handleExperienceChange(
-                          index,
-                          "summary",
-                          e.target.value
-                        )
+                        handleExperienceChange(index, "summary", e.target.value)
                       }
                     />
                     <Stack direction={{ sm: "row" }} spacing={2}>

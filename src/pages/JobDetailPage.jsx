@@ -109,10 +109,7 @@ export default function JobDetailPage() {
           }}
         >
           <Tab label="OVERVIEW" value="overview" />
-          {(!user.role === "admin" || !user.role === "super-admin") && (
-            <Tab label="APPLICATION" value="application" />
-          )}
-          {/* ⭐ FIXED: Add missing tab */}
+          <Tab label="APPLICATION" value="application" />
           {isAdmin && <Tab label="CANDIDATES" value="candidates" />}
         </Tabs>
 
@@ -135,10 +132,9 @@ export default function JobDetailPage() {
             </Box>
           )}
 
-          {(!user.role === "admin" || !user.role === "super-admin") &&
-            tab === "application" && (
-              <JobApplicationForm job={job} isAdmin={isAdmin} />
-            )}
+          {tab === "application" && (
+            <JobApplicationForm job={job} isAdmin={isAdmin} />
+          )}
 
           {tab === "candidates" && isAdmin && (
             <JobCandidatesList jobId={job.id} />

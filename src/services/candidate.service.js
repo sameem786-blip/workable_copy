@@ -119,3 +119,16 @@ export const sendEmailToCandidate = async (
     throw error;
   }
 };
+
+export const uploadProfilePhoto = async (file, jobId, email) => {
+  if (!file) return null;
+
+  const safeEmail = email.replace(/[@.]/g, "_");
+  const cleanName = file.name.replace(/\s+/g, "_");
+
+  const filePath = `profilePhotos/${jobId}_${safeEmail}_${cleanName}`;
+  const storageRef = ref(storage, filePath);
+
+  const snapshot = await uploadBytes(storageRef, file);
+  return await getDownloadURL(snapshot.ref);
+};
