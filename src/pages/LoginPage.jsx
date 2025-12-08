@@ -3,10 +3,9 @@ import { useDispatch, useSelector } from "react-redux";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "../firebase";
 import { doc, getDoc } from "firebase/firestore";
-import { fetchEmployees } from "../services/employee.service";
 import { fetchLogsFromFirestore } from "../services/log.service";
 
-import { setEmployees } from "../store/employeesSlice";
+import { setUsers } from "../store/usersSlice";
 import { setLogs } from "../store/logsSlice";
 import {
   Alert,
@@ -29,8 +28,6 @@ import { fetchUsers } from "../services/user.service";
 
 export default function LoginPage() {
   const dispatch = useDispatch();
-  const [users, setUsers] = useState([]);
-  const employees = useSelector((state) => state.employees.list);
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const redirectTo = params.get("redirect") || "/jobs";
@@ -90,14 +87,14 @@ export default function LoginPage() {
       setLoggedInRole(role);
       setSuccess(true);
 
-      // 🔥 2) If super-admin → fetch employees + logs
+      // 🔥 2) If super-admin → load users + logs
       if (role === "super-admin") {
-        const [employeesData, logsData] = await Promise.all([
-          fetchEmployees(),
+        const [usersData, logsData] = await Promise.all([
+          fetchUsers(),
           fetchLogsFromFirestore(),
         ]);
 
-        dispatch(setEmployees(employeesData));
+        dispatch(setUsers(usersData)); // FIXED ✔
         dispatch(setLogs(logsData));
       }
 
@@ -111,27 +108,26 @@ export default function LoginPage() {
     }
   };
 
+  // Load all users once
   useEffect(() => {
     const loadUsers = async () => {
       const data = await fetchUsers();
-      setUsers(data);
+      dispatch(setUsers(data)); // FIXED ✔
     };
     loadUsers();
-  }, []);
+  }, [dispatch]);
 
+  // Clean timeout
   useEffect(
-    () => () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    },
+    () =>
+      () => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      },
     []
   );
 
   return (
-    <Box
-      sx={{ display: "grid", placeItems: "center", minHeight: "60vh", py: 6 }}
-    >
+    <Box sx={{ display: "grid", placeItems: "center", minHeight: "60vh", py: 6 }}>
       <Card
         elevation={0}
         sx={{
@@ -139,8 +135,7 @@ export default function LoginPage() {
           maxWidth: 420,
           borderRadius: 3,
           border: "1px solid #e5e7eb",
-          boxShadow: "0 18px 40px rgba(15, 23, 42, 0.08)",
-          background: "#ffffff",
+          background: "#fff",
         }}
       >
         <CardContent sx={{ p: { xs: 3, sm: 4 } }}>

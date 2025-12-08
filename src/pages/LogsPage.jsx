@@ -21,12 +21,13 @@ import { setLogs } from "../store/logsSlice";
 
 export default function LogsPage() {
   const dispatch = useDispatch();
-  const logs = useSelector((state) => state.logs.entries);
   const navigate = useNavigate();
-  const jobs = useSelector((state) => state.jobs.list);
-  const employees = useSelector((state) => state.employees.list);
 
-  // 🔥 1. Fetch logs from Firestore on mount
+  const logs = useSelector((state) => state.logs.entries);
+  const jobs = useSelector((state) => state.jobs.list);
+  const users = useSelector((state) => state.users.list);
+
+  // 🔥 Fetch logs on mount
   useEffect(() => {
     const loadLogs = async () => {
       const firebaseLogs = await fetchLogsFromFirestore();
@@ -36,40 +37,59 @@ export default function LogsPage() {
     loadLogs();
   }, [dispatch]);
 
-  // ------------------ UI BELOW (UNCHANGED) ------------------
-
+  // Lookup maps to resolve job/user names
   const jobLookup = useMemo(() => {
     const map = new Map();
-    jobs.forEach((job) => map.set(String(job.id), job));
+    jobs?.forEach((job) => map.set(String(job.id), job));
     return map;
   }, [jobs]);
 
-  const employeeLookup = useMemo(() => {
+  const userLookup = useMemo(() => {
     const map = new Map();
-    employees.forEach((emp) => map.set(String(emp.id), emp));
+    users?.forEach((u) => map.set(String(u.id), u));
     return map;
-  }, [employees]);
+  }, [users]);
 
+  // 🔗 Render the correct link for each log entry
   const renderLink = (log) => {
+    // Job item
     if (log.entityType === "job") {
       const job = jobLookup.get(String(log.entityId));
-      if (!job) return <Typography sx={{ color: "#94a3b8" }}>Job unavailable</Typography>;
+      if (!job)
+        return <Typography sx={{ color: "#94a3b8" }}>Job unavailable</Typography>;
+
       return (
-        <Link component="button" underline="hover"
+        <Link
+          component="button"
+          underline="hover"
           onClick={() => navigate(`/jobs/${job.id}`)}
-          sx={{ fontWeight: 700 }}>
+          sx={{ fontWeight: 700 }}
+        >
           {job.title}
         </Link>
       );
     }
-    if (log.entityType === "employee") {
-      const emp = employeeLookup.get(String(log.entityId));
-      if (!emp) return <Typography sx={{ color: "#94a3b8" }}>Employee unavailable</Typography>;
+
+    // User (used to be employee)
+    if (log.entityType === "user") {
+      const user = userLookup.get(String(log.entityId));
+      if (!user)
+        return (
+          <Typography sx={{ color: "#94a3b8" }}>User unavailable</Typography>
+        );
+
+      const fullName = user.firstName
+        ? `${user.firstName} ${user.lastName}`
+        : user.email;
+
       return (
-        <Link component="button" underline="hover"
-          onClick={() => navigate(`/employees/${emp.id}`)}
-          sx={{ fontWeight: 700 }}>
-          {emp.name || emp.email}
+        <Link
+          component="button"
+          underline="hover"
+          onClick={() => navigate(`/employees/${user.id}`)}
+          sx={{ fontWeight: 700 }}
+        >
+          {fullName}
         </Link>
       );
     }
@@ -99,7 +119,9 @@ export default function LogsPage() {
                 {logs.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={3}>
-                      <Typography sx={{ color: "#475569" }}>No activity yet.</Typography>
+                      <Typography sx={{ color: "#475569" }}>
+                        No activity yet.
+                      </Typography>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -107,14 +129,22 @@ export default function LogsPage() {
                     <TableRow key={log.id} hover>
                       <TableCell>
                         <Stack spacing={0.25}>
-                          <Typography sx={{ fontWeight: 700, textTransform: "capitalize" }}>
-                            {log.actor?.name || "Unknown user"} {log.actionLabel || "created"} a new {log.entityType}
+                          <Typography
+                            sx={{
+                              fontWeight: 700,
+                              textTransform: "capitalize",
+                            }}
+                          >
+                            {log.actor?.name || "Unknown user"}{" "}
+                            {log.actionLabel || "performed"} {log.entityType} action
                           </Typography>
+
                           <Typography variant="body2" sx={{ color: "#64748b" }}>
                             {log.actor?.email}
                           </Typography>
                         </Stack>
                       </TableCell>
+
                       <TableCell>{renderLink(log)}</TableCell>
 
                       <TableCell>
@@ -124,7 +154,6 @@ export default function LogsPage() {
                   ))
                 )}
               </TableBody>
-
             </Table>
           </TableContainer>
         </CardContent>

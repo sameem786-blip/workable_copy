@@ -16,23 +16,20 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
-
-import { setEmployees } from "../store/employeesSlice";
-import { fetchEmployees } from "../services/employee.service";
+import { setUsers } from "../store/usersSlice";
+import { fetchUsers } from "../services/user.service";
 
 export default function EmployeesPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const employees = useSelector((state) => state.employees.list);
-
-  // Load employees from Firebase
+  const users = useSelector((state) => state.users.list);
   useEffect(() => {
-    const loadEmployees = async () => {
-      const data = await fetchEmployees();
-      dispatch(setEmployees(data));
+    const loadUsers = async () => {
+      const data = await fetchUsers();
+      dispatch(setUsers(data));
     };
 
-    loadEmployees();
+    loadUsers();
   }, [dispatch]);
 
   return (
@@ -69,19 +66,19 @@ export default function EmployeesPage() {
               </TableHead>
 
               <TableBody>
-                {employees.map((employee) => (
+                {users.map((user) => (
                   <TableRow
-                    key={employee.id}
+                    key={user.id}
                     hover
                     sx={{ cursor: "pointer" }}
-                    onClick={() => navigate(`/employees/${employee.id}`)}
+                    onClick={() => navigate(`/employees/${user.id}`)}
                   >
                     <TableCell sx={{ fontWeight: 700 }}>
-                      {employee.firstName + " " + employee.lastName}
+                      {user.firstName + " " + user.lastName}
                     </TableCell>
-                    <TableCell>{employee.email}</TableCell>
-                    <TableCell>{employee.role || "—"}</TableCell>
-                    <TableCell>{employee.department || "—"}</TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>{user.role || "—"}</TableCell>
+                    <TableCell>{user.department || "—"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

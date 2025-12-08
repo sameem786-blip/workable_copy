@@ -14,9 +14,10 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 
-import { addEmployee } from "../store/employeesSlice";
+import { addUser } from "../store/usersSlice";      
 import { addLog } from "../store/logsSlice";
-import { createEmployee } from "../services/employee.service";
+
+import { createUserAccount } from "../services/user.service";  
 
 const roleOptions = ["admin"];
 const departmentOptions = [
@@ -43,16 +44,13 @@ export default function AddEmployeePage() {
     email: "",
     department: "",
     password: "12345678",
-    role: roleOptions[0],
+    role: "admin",
   });
 
-  const handleChange = (field) => (event) => {
-    setForm((prev) => ({ ...prev, [field]: event.target.value }));
+  const handleChange = (field) => (e) => {
+    setForm((prev) => ({ ...prev, [field]: e.target.value }));
   };
 
-  // --------------------------------------------------------
-  // ✅ Correct Firebase Submit Handler
-  // --------------------------------------------------------
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -65,31 +63,65 @@ export default function AddEmployeePage() {
       setLoading(true);
       setError("");
 
-      // 1️⃣ Create employee in Firestore
-      const created = await createEmployee(form); // <-- real API call!
+      // --------------------------
+      // 1️⃣ Create user (Auth + Firestore)
+      // --------------------------
+      const firebaseUser = await createUserAccount(
+        form.email,
+        form.password,
+        {
+          firstName: form.firstName,
+          lastName: form.lastName,
+          role: form.role,
+          department: form.department,
+        }
+      );
 
-      // 2️⃣ Update Redux store
-      dispatch(addEmployee({ id: created.id, ...form }));
+      const newUserId = firebaseUser.uid;
 
-      // 3️⃣ Log the action
+      // --------------------------
+      // 2️⃣ Update Redux users list
+      // --------------------------
+      dispatch(
+        addUser({
+          id: newUserId,
+          firstName: form.firstName,
+          lastName: form.lastName,
+          email: form.email,
+          role: form.role,
+          department: form.department,
+        })
+      );
+
+      // --------------------------
+      // 3️⃣ Add Log Entry
+      // --------------------------
       dispatch(
         addLog({
-          actor: { name: user?.name || "User", email: user?.email || "" },
-          entityId: created.id,
-          entityName: `${form.firstName} ${form.lastName}`.trim(),
-          entityType: "employee",
+          actor: {
+            name: user?.name || "User",
+            email: user?.email || "",
+          },
+          entityId: newUserId,
+          entityName: `${form.firstName} ${form.lastName}`,
+          entityType: "user",
           actionLabel: "created",
         })
       );
 
-      // 4️⃣ Show success snackbar
+      // --------------------------
+      // 4️⃣ Show success message
+      // --------------------------
       setSuccess(true);
 
-      // 5️⃣ Redirect after brief delay
-      setTimeout(() => navigate(`/employees/${created.id}`), 1200);
+      // --------------------------
+      // 5️⃣ Redirect
+      // --------------------------
+      setTimeout(() => navigate(`/employees/${newUserId}`), 1200);
+
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to create employee. Please try again.");
+      setError(err.message || "Failed to create user. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -125,6 +157,7 @@ export default function AddEmployeePage() {
               value={form.firstName}
               onChange={handleChange("firstName")}
             />
+
             <TextField
               label="Last name"
               required
@@ -154,8 +187,8 @@ export default function AddEmployeePage() {
               ))}
             </TextField>
 
-            <TextField label="Role" value={"admin"} select disabled >
-               {roleOptions.map((role) => (
+            <TextField label="Role" value={"admin"} select disabled>
+              {roleOptions.map((role) => (
                 <MenuItem key={role} value={role}>
                   {role}
                 </MenuItem>
@@ -183,7 +216,7 @@ export default function AddEmployeePage() {
         </CardContent>
       </Card>
 
-      {/* SUCCESS SNACKBAR */}
+      {/* SUCCESS */}
       <Snackbar
         open={success}
         autoHideDuration={2500}
@@ -195,7 +228,7 @@ export default function AddEmployeePage() {
         </Alert>
       </Snackbar>
 
-      {/* ERROR SNACKBAR */}
+      {/* ERROR */}
       <Snackbar
         open={!!error}
         autoHideDuration={3000}
