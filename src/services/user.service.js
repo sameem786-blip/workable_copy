@@ -1,12 +1,8 @@
 // services/users.js
 import { auth, db } from "../firebase";
-import {
-  signInWithEmailAndPassword,
-  deleteUser as deleteAuthUser,
-} from "firebase/auth";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import {
   collection,
-  addDoc,
   getDocs,
   doc,
   getDoc,
@@ -16,39 +12,82 @@ import {
 } from "firebase/firestore";
 import axios from "axios";
 
+const FUNCTIONS_BASE_URL =
+  "https://us-central1-workable-clone-fdb2e.cloudfunctions.net";
+
+// ----------------------------
+// AUTH / FIREBASE FUNCTION APIs
+// ----------------------------
+
+// Create a user via Firebase Function (admin)
 export const createUserByAdminHTTP = async (userData) => {
   try {
-    const result = await axios.post(
-      "https://us-central1-workable-clone-fdb2e.cloudfunctions.net/createUserByAdmin",
+    const res = await axios.post(
+      `${FUNCTIONS_BASE_URL}/createUserByAdmin`,
       userData,
       {
         headers: {
-          // Optional: pass the Firebase Auth ID token for verification
           Authorization: `Bearer ${localStorage.getItem("firebaseToken")}`,
         },
       }
     );
-
-    return result.data; // { uid: ... }
+    return res.data; // { uid: ... }
   } catch (error) {
-    console.error("Error creating user via admin:", error);
+    console.error(
+      "Error creating user via admin:",
+      error.response?.data || error.message
+    );
     throw error;
   }
 };
 
-// Login user using Firebase Auth
-export const loginUserAccount = async (email, password) => {
+// Update user via Firebase Function (admin)
+export const updateUserByAdminHTTP = async (userData) => {
   try {
-    return await signInWithEmailAndPassword(auth, email, password);
+    const res = await axios.post(
+      `${FUNCTIONS_BASE_URL}/updateUserByAdmin`,
+      userData,
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("firebaseToken")}`,
+        },
+      }
+    );
+    return res.data;
   } catch (error) {
-    console.error("Login error:", error);
+    console.error(
+      "Error updating user via admin:",
+      error.response?.data || error.message
+    );
     throw error;
   }
 };
 
-// ==========================
-// FIRESTORE CRUD
-// ==========================
+// Delete user via Firebase Function (admin)
+export const deleteUserByAdminHTTP = async (uid) => {
+  try {
+    const res = await axios.post(
+      `${FUNCTIONS_BASE_URL}/deleteUserByAdmin`,
+      { uid },
+      {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("firebaseToken")}`,
+        },
+      }
+    );
+    return res.data;
+  } catch (error) {
+    console.error(
+      "Error deleting user via admin:",
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
+
+// ----------------------------
+// FIRESTORE CRUD (optional for local state)
+// ----------------------------
 
 // Fetch all users
 export const fetchUsers = async () => {
@@ -72,29 +111,12 @@ export const getUserProfile = async (uid) => {
   }
 };
 
-// Update user profile (name, dept, role)
-export const updateUserProfile = async (uid, data) => {
+// Login user using Firebase Auth
+export const loginUserAccount = async (email, password) => {
   try {
-    await updateDoc(doc(db, "users", uid), data);
+    return await signInWithEmailAndPassword(auth, email, password);
   } catch (error) {
-    console.error("Error updating user:", error);
-    throw error;
-  }
-};
-
-// Delete user from Firestore + Auth
-export const deleteUserAccount = async (uid) => {
-  try {
-    // Delete Firestore doc
-    await deleteDoc(doc(db, "users", uid));
-
-    // Delete auth user (must be logged in OR use Admin SDK)
-    const user = auth.currentUser;
-    if (user && user.uid === uid) {
-      await deleteAuthUser(user);
-    }
-  } catch (error) {
-    console.error("Error deleting user:", error);
+    console.error("Login error:", error);
     throw error;
   }
 };

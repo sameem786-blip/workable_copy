@@ -1,3 +1,4 @@
+// pages/Employees.js
 import { useEffect } from "react";
 import {
   Box,
@@ -14,23 +15,69 @@ import {
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { setUsers } from "../store/usersSlice";
-import { fetchUsers } from "../services/user.service";
+import { fetchUsers, deleteUserByAdminHTTP } from "../services/user.service";
+import { addLog } from "../store/logsSlice";
 
 export default function EmployeesPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const users = useSelector((state) => state.users.list);
+  const currentUser = useSelector((state) => state.auth.user); // actor for logs
+
+  // Load users on mount
   useEffect(() => {
     const loadUsers = async () => {
-      const data = await fetchUsers();
-      dispatch(setUsers(data));
+      try {
+        const data = await fetchUsers();
+        dispatch(setUsers(data));
+      } catch (err) {
+        console.error("Error fetching users:", err);
+      }
     };
 
     loadUsers();
   }, [dispatch]);
+
+  // Delete user
+  const handleDelete = async (userId) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this employee?"
+    );
+    if (!confirmed) return;
+
+    const userToDelete = users.find((u) => u.id === userId);
+    if (!userToDelete) return;
+
+    try {
+      await deleteUserByAdminHTTP(userId);
+
+      // Log the deletion
+      dispatch(
+        addLog({
+          actor: {
+            name: currentUser?.firstName + " " + currentUser?.lastName || "Unknown",
+            email: currentUser?.email || "",
+          },
+          entityId: userId,
+          entityName: `${userToDelete.firstName} ${userToDelete.lastName}`,
+          entityType: "user",
+          actionLabel: "deleted",
+        })
+      );
+
+      // Refresh the users list
+      const data = await fetchUsers();
+      dispatch(setUsers(data));
+    } catch (err) {
+      console.error("Failed to delete user:", err);
+      alert("Failed to delete employee. Check console for details.");
+    }
+  };
 
   return (
     <Box sx={{ mt: 2 }}>
@@ -48,7 +95,7 @@ export default function EmployeesPage() {
           startIcon={<AddIcon />}
           onClick={() => navigate("/employees/new")}
         >
-          Add new
+          Add New
         </Button>
       </Stack>
 
@@ -62,25 +109,49 @@ export default function EmployeesPage() {
                   <TableCell>Email</TableCell>
                   <TableCell>Role</TableCell>
                   <TableCell>Department</TableCell>
+                  <TableCell align="center">Actions</TableCell>
                 </TableRow>
               </TableHead>
 
               <TableBody>
-                {users.map((user) => (
-                  <TableRow
-                    key={user.id}
-                    hover
-                    sx={{ cursor: "pointer" }}
-                    onClick={() => navigate(`/employees/${user.id}`)}
-                  >
-                    <TableCell sx={{ fontWeight: 700 }}>
-                      {user.firstName + " " + user.lastName}
+                {users.length > 0 ? (
+                  users.map((user) => (
+                    <TableRow key={user.id} hover>
+                      <TableCell sx={{ fontWeight: 700 }}>
+                        {user.firstName} {user.lastName}
+                      </TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>{user.role || "—"}</TableCell>
+                      <TableCell>{user.department || "—"}</TableCell>
+                      <TableCell align="center">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<EditIcon />}
+                          sx={{ mr: 1 }}
+                          onClick={() => navigate(`/employees/edit/${user.id}`)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="error"
+                          startIcon={<DeleteIcon />}
+                          onClick={() => handleDelete(user.id)}
+                        >
+                          Delete
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      No employees found.
                     </TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.role || "—"}</TableCell>
-                    <TableCell>{user.department || "—"}</TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </TableContainer>

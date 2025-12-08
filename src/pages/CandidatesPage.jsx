@@ -25,7 +25,6 @@ export default function CandidatesPage() {
 
   // Filters state
   const [search, setSearch] = useState("");
-  const [department, setDepartment] = useState("");
   const [job, setJob] = useState("");
   const [stage, setStage] = useState("");
 

@@ -5,7 +5,6 @@ import {
   Navigate,
   Route,
   Routes,
-  useNavigate,
 } from "react-router-dom";
 import {
   AppBar,
@@ -167,6 +166,15 @@ function App() {
 
               <Route
                 path="/employees/new"
+                element={
+                  <RequireSuperAdmin>
+                    <AddEmployeePage />
+                  </RequireSuperAdmin>
+                }
+              />
+
+              <Route
+                path="/employees/edit/:id"
                 element={
                   <RequireSuperAdmin>
                     <AddEmployeePage />
