@@ -2,8 +2,10 @@ import * as functions from "firebase-functions";
 import admin from "firebase-admin";
 import nodemailer from "nodemailer";
 import cors from "cors";
+export { createUserByAdmin } from "./createUser.js";
 
 admin.initializeApp();
+
 const db = admin.firestore();
 
 const transporter = nodemailer.createTransport({

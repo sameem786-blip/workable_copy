@@ -1,11 +1,9 @@
 // services/users.js
 import { auth, db } from "../firebase";
 import {
-  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   deleteUser as deleteAuthUser,
 } from "firebase/auth";
-
 import {
   collection,
   addDoc,
@@ -16,22 +14,24 @@ import {
   updateDoc,
   deleteDoc,
 } from "firebase/firestore";
+import axios from "axios";
 
-export const createUserAccount = async (email, password, profile) => {
+export const createUserByAdminHTTP = async (userData) => {
   try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
+    const result = await axios.post(
+      "https://us-central1-workable-clone-fdb2e.cloudfunctions.net/createUserByAdmin",
+      userData,
+      {
+        headers: {
+          // Optional: pass the Firebase Auth ID token for verification
+          Authorization: `Bearer ${localStorage.getItem("firebaseToken")}`,
+        },
+      }
+    );
 
-    // 2. Create Firestore user profile with UID as document ID5
-    await setDoc(doc(db, "users", user.uid), {
-      email,
-      ...profile, // firstName, lastName, role, department...
-    });
-
-    return user;
-
+    return result.data; // { uid: ... }
   } catch (error) {
-    console.error("Error creating user:", error);
+    console.error("Error creating user via admin:", error);
     throw error;
   }
 };
@@ -45,7 +45,6 @@ export const loginUserAccount = async (email, password) => {
     throw error;
   }
 };
-
 
 // ==========================
 // FIRESTORE CRUD
@@ -94,7 +93,6 @@ export const deleteUserAccount = async (uid) => {
     if (user && user.uid === uid) {
       await deleteAuthUser(user);
     }
-    
   } catch (error) {
     console.error("Error deleting user:", error);
     throw error;

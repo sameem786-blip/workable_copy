@@ -13,12 +13,9 @@ import {
 } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-
-import { addUser } from "../store/usersSlice";      
+import { createUserByAdminHTTP } from "../services/user.service";
+import { addUser } from "../store/usersSlice";
 import { addLog } from "../store/logsSlice";
-
-import { createUserAccount } from "../services/user.service";  
-
 const roleOptions = ["admin"];
 const departmentOptions = [
   "Operations",
@@ -63,25 +60,18 @@ export default function AddEmployeePage() {
       setLoading(true);
       setError("");
 
-      // --------------------------
-      // 1️⃣ Create user (Auth + Firestore)
-      // --------------------------
-      const firebaseUser = await createUserAccount(
-        form.email,
-        form.password,
-        {
-          firstName: form.firstName,
-          lastName: form.lastName,
-          role: form.role,
-          department: form.department,
-        }
-      );
+      // Call Admin function instead of client SDK
+      const result = await createUserByAdminHTTP({
+        email: form.email,
+        password: form.password,
+        firstName: form.firstName,
+        lastName: form.lastName,
+        role: form.role,
+        department: form.department,
+      });
 
-      const newUserId = firebaseUser.uid;
-
-      // --------------------------
-      // 2️⃣ Update Redux users list
-      // --------------------------
+      const newUserId = result.uid;
+      // Update Redux users list
       dispatch(
         addUser({
           id: newUserId,
@@ -93,15 +83,10 @@ export default function AddEmployeePage() {
         })
       );
 
-      // --------------------------
-      // 3️⃣ Add Log Entry
-      // --------------------------
+      // Add log entry
       dispatch(
         addLog({
-          actor: {
-            name: user?.name || "User",
-            email: user?.email || "",
-          },
+          actor: { name: user?.name || "User", email: user?.email || "" },
           entityId: newUserId,
           entityName: `${form.firstName} ${form.lastName}`,
           entityType: "user",
@@ -109,16 +94,8 @@ export default function AddEmployeePage() {
         })
       );
 
-      // --------------------------
-      // 4️⃣ Show success message
-      // --------------------------
       setSuccess(true);
-
-      // --------------------------
-      // 5️⃣ Redirect
-      // --------------------------
       setTimeout(() => navigate(`/employees/${newUserId}`), 1200);
-
     } catch (err) {
       console.error(err);
       setError(err.message || "Failed to create user. Please try again.");
@@ -128,7 +105,9 @@ export default function AddEmployeePage() {
   };
 
   return (
-    <Box sx={{ display: "grid", placeItems: "center", minHeight: "60vh", py: 4 }}>
+    <Box
+      sx={{ display: "grid", placeItems: "center", minHeight: "60vh", py: 4 }}
+    >
       <Card
         elevation={0}
         sx={{
